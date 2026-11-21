@@ -20,6 +20,7 @@ from sqlalchemy import inspect, text
 
 from .base import Base
 from .connection import engine
+from .migrations import run_schema_migrations
 
 logger = logging.getLogger(__name__)
 
@@ -29,16 +30,19 @@ logger = logging.getLogger(__name__)
 from . import models  # noqa: F401, E402  (side-effect import)
 
 
-def create_tables() -> None:
+def create_tables(target_engine=None) -> None:
     """
     Create all database tables defined in the ORM models.
 
     Uses checkfirst=True (default via create_all) so existing tables
     are left untouched.  Safe to call multiple times.
+    Also executes additive schema migrations.
     """
+    bind_engine = target_engine or engine
     logger.info("Creating database tables (if not already present)...")
-    Base.metadata.create_all(bind=engine)
-    logger.info("Tables created successfully.")
+    Base.metadata.create_all(bind=bind_engine)
+    run_schema_migrations(bind_engine)
+    logger.info("Tables created and migrations applied successfully.")
 
 
 def drop_tables() -> None:

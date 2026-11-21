@@ -25,6 +25,7 @@ from backend.app.schemas.customer_schemas import (
     AgentQueryResponse,
     Customer360Response,
 )
+from backend.app.services.currency_service import format_inr
 from backend.app.services.customer_service import get_customer_360
 
 logger = logging.getLogger(__name__)
@@ -83,14 +84,20 @@ def _build_evidence_context(profile: Customer360Response) -> Tuple[str, List[str
     evidence_ids.append(f"Customer #{c.id}")
 
     lines.append("\nHISTORICAL METRICS & VALUE:")
-    lines.append(f"- Customer Lifetime Value (CLTV): ${m.cltv_total:,.2f} USD")
-    lines.append(f"  * Vehicle Purchases: ${m.cltv_vehicle_spend:,.2f}")
-    lines.append(f"  * Service Payments: ${m.cltv_service_spend:,.2f}")
-    lines.append(f"  * Parts & Accessories: ${m.cltv_parts_accessories_spend:,.2f}")
+    lines.append(f"- Enterprise Currency: INR (₹)")
+    lines.append(f"- Customer Lifetime Value (CLTV): {format_inr(m.cltv_total)} INR")
+    lines.append(f"  * Vehicle Purchases: {format_inr(m.cltv_vehicle_spend)}")
+    lines.append(f"  * Service Payments: {format_inr(m.cltv_service_spend)}")
+    lines.append(f"  * Parts & Accessories: {format_inr(m.cltv_parts_accessories_spend)}")
     lines.append(f"- Completed Transactions: {m.completed_transactions_count} of {m.total_transactions_count}")
     lines.append(f"- Total Vehicles Owned: {m.total_vehicles_count}")
-    lines.append(f"- Loyalty Points Balance: {m.loyalty_points_balance} pts (Earned: {m.loyalty_points_earned}, Redeemed: {m.loyalty_points_redeemed})")
-    lines.append(f"- Service Visits Count: {m.total_services_count} (Total Service Spend: ${m.total_service_cost:,.2f})")
+    lines.append(f"- 2026 Annual Loyalty Program:")
+    lines.append(f"  * 2026 Available Balance: {m.annual_loyalty_balance} pts")
+    lines.append(f"  * 2026 Visit Rewards: {m.annual_visit_points} pts (from {m.qualifying_visits_2026_count} qualifying completed visit(s))")
+    lines.append(f"  * 2026 Birthday Bonus: {m.annual_birthday_points} pts ({'Awarded' if m.has_birthday_bonus else 'Not awarded / Not yet eligible'})")
+    lines.append(f"  * 2026 Points Redeemed: {m.annual_redeemed_points} pts")
+    lines.append(f"- Lifetime Points Balance: {m.loyalty_points_balance} pts (Earned: {m.loyalty_points_earned}, Redeemed: {m.loyalty_points_redeemed})")
+    lines.append(f"- Service Visits Count: {m.total_services_count} (Total Service Spend: {format_inr(m.total_service_cost)})")
     lines.append(f"- Reviews Submitted: {m.total_reviews_count} (Average Rating: {m.average_rating or 'N/A'}★)")
 
     lines.append("\nOWNED VEHICLES:")
@@ -99,8 +106,8 @@ def _build_evidence_context(profile: Customer360Response) -> Tuple[str, List[str
             tag = f"Vehicle VIN: {v.vin}"
             evidence_ids.append(tag)
             primary_badge = " [PRIMARY]" if v.is_primary else ""
-            price_str = f"${v.purchase_price:,.2f}" if v.purchase_price is not None else "N/A"
-            mileage_str = f"{v.current_mileage:,} mi" if v.current_mileage is not None else "N/A"
+            price_str = format_inr(v.purchase_price) if v.purchase_price is not None else "N/A"
+            mileage_str = f"{v.current_mileage:,} km/mi" if v.current_mileage is not None else "N/A"
             lines.append(
                 f"- [{tag}]{primary_badge} {v.year} {v.make} {v.model} ({v.trim or 'Base'}), "
                 f"Body: {v.body_style or 'N/A'}, Fuel: {v.fuel_type or 'N/A'}, "
@@ -119,7 +126,7 @@ def _build_evidence_context(profile: Customer360Response) -> Tuple[str, List[str
             evidence_ids.append(tag)
             lines.append(
                 f"- [{tag}] Date: {t.transaction_date}, Type: {t.transaction_type}, "
-                f"Amount: ${t.amount:,.2f} {t.currency}, Status: {t.status}, "
+                f"Amount: {format_inr(t.amount)} ({t.currency}), Status: {t.status}, "
                 f"Method: {t.payment_method or 'N/A'}, Dealer: {t.dealer_name or 'N/A'}, "
                 f"Vehicle: {t.vehicle_info or 'N/A'}"
             )
@@ -128,18 +135,25 @@ def _build_evidence_context(profile: Customer360Response) -> Tuple[str, List[str
     else:
         lines.append("- No transactions on record.")
 
-    lines.append("\nSERVICE HISTORY (Recent):")
+    lines.append("\nDETAILED SERVICE HISTORY (Recent):")
     if profile.service_visits:
         for sv in profile.service_visits[:10]:
             tag = f"Service Visit #{sv.id}"
             evidence_ids.append(tag)
-            cost_str = f"${sv.cost:,.2f}" if sv.cost is not None else "$0.00"
-            mileage_sv_str = f"{sv.mileage_at_service:,} mi" if sv.mileage_at_service is not None else "N/A"
+            cost_str = format_inr(sv.cost) if sv.cost is not None else "₹0.00"
+            parts_str = format_inr(sv.parts_cost) if sv.parts_cost is not None else "N/A"
+            labour_str = format_inr(sv.labour_cost) if sv.labour_cost is not None else "N/A"
+            odometer_str = f"{sv.odometer_reading or sv.mileage_at_service:,} km/mi" if (sv.odometer_reading or sv.mileage_at_service) is not None else "N/A"
             lines.append(
                 f"- [{tag}] Date: {sv.service_date}, Vehicle: {sv.vehicle_info or sv.vehicle_vin}, "
-                f"Service Type: {sv.service_type}, Cost: {cost_str}, "
-                f"Mileage: {mileage_sv_str}, Dealer: {sv.dealer_name or 'N/A'}, "
-                f"Warranty: {'Yes' if sv.is_warranty else 'No'}, Notes: {sv.technician_notes or sv.description or 'None'}"
+                f"Service Type: {sv.service_type}, Status: {sv.service_status or 'completed'}, "
+                f"Total Cost: {cost_str} (Parts: {parts_str}, Labour: {labour_str}), "
+                f"Odometer: {odometer_str}, Dealer: {sv.dealer_name or 'N/A'}, "
+                f"Customer Complaint: {sv.customer_complaint or 'None noted'}, "
+                f"Diagnosis: {sv.diagnosis or 'None noted'}, "
+                f"Work Performed: {sv.work_performed or sv.description or 'None noted'}, "
+                f"Warranty: {'Yes' if sv.is_warranty else 'No'}, "
+                f"Next Service: {sv.next_service_date or 'Not scheduled'}"
             )
         if len(profile.service_visits) > 10:
             lines.append(f"- ... plus {len(profile.service_visits) - 10} earlier service visits.")
@@ -154,6 +168,7 @@ def _build_evidence_context(profile: Customer360Response) -> Tuple[str, List[str
             lines.append(
                 f"- [{tag}] Date: {le.event_date}, Event: {le.event_type}, "
                 f"Points: {le.points:+d}, Balance After: {le.balance_after} pts, "
+                f"Program Year: {le.program_year or 'Historical'}, "
                 f"Desc: {le.description or 'N/A'}"
             )
     else:
@@ -184,61 +199,81 @@ def _build_fallback_answer(profile: Customer360Response, question: str, evidence
     m = profile.metrics
     q = question.lower()
 
+    # Service inquiries (e.g., "service on vehicle", "repair history", "parts replaced")
+    if any(k in q for k in ["service", "maintenance", "repair", "oil", "part", "labour", "diagnosis", "complaint", "odometer"]):
+        recent_svc = profile.service_visits[0] if profile.service_visits else None
+        if recent_svc:
+            parts_str = f", Parts: {format_inr(recent_svc.parts_cost)}" if recent_svc.parts_cost is not None else ""
+            labour_str = f", Labour: {format_inr(recent_svc.labour_cost)}" if recent_svc.labour_cost is not None else ""
+            svc_info = (
+                f"Most recent: {recent_svc.service_date} - {recent_svc.service_type} ({format_inr(recent_svc.cost)}{parts_str}{labour_str}) "
+                f"at {recent_svc.dealer_name} ([Service Visit #{recent_svc.id}]). "
+                f"Work performed: {recent_svc.work_performed or recent_svc.description or 'N/A'}"
+            )
+        else:
+            svc_info = "No service records"
+        
+        loyalty_snippet = f"\n- **2026 Annual Loyalty Balance:** {m.annual_loyalty_balance:,} points" if any(k in q for k in ["loyalty", "point", "balance"]) else ""
+
+        return (
+            f"**Customer Service Summary for {c.full_name}:**\n\n"
+            f"- **Total Service Visits:** {m.total_services_count}\n"
+            f"- **Total Service Expenditure:** {format_inr(m.total_service_cost)} INR\n"
+            f"- **Recent Service Details:** {svc_info}"
+            f"{loyalty_snippet}\n"
+            f"\n*Note: Aggregated from vehicle service records and loyalty ledger.*"
+        )
+
+    # Loyalty & Rewards inquiries
+    if any(k in q for k in ["loyalty", "point", "reward", "balance", "annual", "birthday", "redeem"]):
+        bday_status = "Awarded (500 pts)" if m.has_birthday_bonus else "Not awarded / Not yet eligible"
+        return (
+            f"**Customer Loyalty Summary for {c.full_name}:**\n\n"
+            f"- **2026 Annual Loyalty Balance:** {m.annual_loyalty_balance:,} points\n"
+            f"- **2026 Visit Rewards:** {m.annual_visit_points:,} points (from {m.qualifying_visits_2026_count} qualifying service visit(s))\n"
+            f"- **2026 Birthday Bonus:** {m.annual_birthday_points:,} points ({bday_status})\n"
+            f"- **2026 Points Redeemed:** {m.annual_redeemed_points:,} points\n"
+            f"- **Lifetime Total Balance:** {m.loyalty_points_balance:,} points ({m.loyalty_points_earned:,} earned, {m.loyalty_points_redeemed:,} redeemed)\n"
+            f"- **Segment:** {c.customer_segment or 'Standard'}\n"
+            f"\n*Note: Verified from Customer #{c.id} 2026 annual loyalty policy ledger.*"
+        )
+
+    # Financial / CLTV inquiries
+    if any(k in q for k in ["value", "spend", "cltv", "worth", "money", "cost", "inr", "rupees", "purchase", "transaction"]):
+        return (
+            f"**Customer Value & Financial Summary for {c.full_name}:**\n\n"
+            f"- **Customer Lifetime Value (CLTV):** {format_inr(m.cltv_total)} INR\n"
+            f"- **Vehicle Purchases:** {format_inr(m.cltv_vehicle_spend)}\n"
+            f"- **Service Spend:** {format_inr(m.cltv_service_spend)}\n"
+            f"- **Parts & Accessories:** {format_inr(m.cltv_parts_accessories_spend)}\n"
+            f"- **Transactions:** {m.completed_transactions_count} completed transactions on record.\n"
+            f"\n*Note: Calculated from actual database transaction records.*"
+        )
+
+    # Vehicle inquiries
     if any(k in q for k in ["vehicle", "car", "drive", "vin", "model", "make"]):
-        veh_list = ", ".join(f"{v.year} {v.make} {v.model} ([Vehicle VIN: {v.vin}])" for v in profile.vehicles)
+        veh_list = ", ".join(
+            f"{v.year} {v.make} {v.model} ({format_inr(v.purchase_price or 0.0)}, VIN: {v.vin})"
+            for v in profile.vehicles
+        )
         return (
             f"**Customer Vehicle Summary for {c.full_name}:**\n\n"
             f"- **Total Vehicles:** {m.total_vehicles_count}\n"
             f"- **Vehicles on Record:** {veh_list or 'None'}\n"
             f"- **Primary Vehicle:** {next((f'{v.year} {v.make} {v.model} ([Vehicle VIN: {v.vin}])' for v in profile.vehicles if v.is_primary), 'None')}\n"
+            f"- **Vehicle Investment:** {format_inr(m.cltv_vehicle_spend)} INR\n"
             f"\n*Note: Generated using verified database records (Local Ollama LLM was busy or offline).* "
             f"Evidence: {', '.join(evidence_ids[:3])}"
-        )
-
-    if any(k in q for k in ["value", "spend", "cltv", "worth", "money", "purchase", "transaction"]):
-        return (
-            f"**Customer Value & Financial Summary for {c.full_name}:**\n\n"
-            f"- **Customer Lifetime Value (CLTV):** ${m.cltv_total:,.2f} USD\n"
-            f"- **Vehicle Purchases:** ${m.cltv_vehicle_spend:,.2f}\n"
-            f"- **Service Spend:** ${m.cltv_service_spend:,.2f}\n"
-            f"- **Parts & Accessories:** ${m.cltv_parts_accessories_spend:,.2f}\n"
-            f"- **Transactions:** {m.completed_transactions_count} completed transactions on record.\n"
-            f"\n*Note: Calculated from actual database transaction records.*"
-        )
-
-    if any(k in q for k in ["loyalty", "point", "reward", "balance"]):
-        return (
-            f"**Customer Loyalty Summary for {c.full_name}:**\n\n"
-            f"- **Current Balance:** {m.loyalty_points_balance:,} points\n"
-            f"- **Total Points Earned:** {m.loyalty_points_earned:,} points\n"
-            f"- **Total Points Redeemed:** {m.loyalty_points_redeemed:,} points\n"
-            f"- **Segment:** {c.customer_segment or 'Standard'}\n"
-            f"\n*Note: Verified from Customer #{c.id} loyalty audit events.*"
-        )
-
-    if any(k in q for k in ["service", "maintenance", "repair", "oil", "warranty"]):
-        recent_svc = profile.service_visits[0] if profile.service_visits else None
-        svc_info = (
-            f"Most recent: {recent_svc.service_date} - {recent_svc.service_type} (${recent_svc.cost:,.2f}) at {recent_svc.dealer_name} ([Service Visit #{recent_svc.id}])"
-            if recent_svc
-            else "No service records"
-        )
-        return (
-            f"**Customer Service Summary for {c.full_name}:**\n\n"
-            f"- **Total Service Visits:** {m.total_services_count}\n"
-            f"- **Total Service Expenditure:** ${m.total_service_cost:,.2f}\n"
-            f"- **Recent Service:** {svc_info}\n"
-            f"\n*Note: Aggregated from vehicle service records.*"
         )
 
     # General Executive Summary
     return (
         f"**Customer 360 Intelligence Summary for {c.full_name} [Customer #{c.id}]:**\n\n"
         f"- **Profile:** {c.customer_segment or 'Standard'} customer residing in {c.city or 'N/A'}, {c.state or 'N/A'}.\n"
-        f"- **Historical CLTV:** ${m.cltv_total:,.2f} USD across {m.completed_transactions_count} completed transactions.\n"
+        f"- **Historical CLTV:** {format_inr(m.cltv_total)} INR across {m.completed_transactions_count} completed transactions.\n"
         f"- **Vehicles:** {m.total_vehicles_count} vehicle(s) owned ({', '.join(f'{v.year} {v.make} {v.model}' for v in profile.vehicles)}).\n"
-        f"- **Loyalty:** {m.loyalty_points_balance:,} points balance ({m.loyalty_points_earned:,} earned).\n"
-        f"- **Service Record:** {m.total_services_count} maintenance visit(s) totaling ${m.total_service_cost:,.2f}.\n"
+        f"- **2026 Loyalty:** {m.annual_loyalty_balance:,} points available ({m.annual_visit_points:,} visit pts + {m.annual_birthday_points:,} birthday bonus).\n"
+        f"- **Service Record:** {m.total_services_count} maintenance visit(s) totaling {format_inr(m.total_service_cost)} INR.\n"
         f"- **Customer Feedback:** {m.total_reviews_count} review(s) submitted with an average rating of {m.average_rating or 'N/A'}★.\n\n"
         f"*Evidence cited from database: {', '.join(evidence_ids[:4])}.*"
     )
@@ -277,12 +312,14 @@ def query_customer_agent(
     system_prompt = (
         "You are AutoInsight360 Customer Intelligence Agent, an enterprise automotive AI assistant. "
         "Your task is to answer the employee's question about the customer using ONLY the verified database records provided. "
-        "Strict Guardrails:\n"
-        "1. Never fabricate or extrapolate facts not present in the provided evidence.\n"
-        "2. When stating facts, cite the specific record identifier (e.g. [Vehicle VIN: ...], [Transaction Ref: ...], [Service Visit #...], [Customer #...]).\n"
-        "3. If the answer cannot be determined from the records, explicitly state: 'The customer records do not contain information regarding [topic].'\n"
-        "4. Do not offer legal, financial, or unverified technical advice.\n"
-        "5. Be concise, direct, professional, and format key points with bullet points."
+        "Strict Enterprise Guardrails:\n"
+        "1. Standard Currency: AutoInsight360 standard currency is Indian Rupees (INR, ₹). Always state monetary values, costs, and spend in INR (₹). Never use dollars ($).\n"
+        "2. 2026 Annual Loyalty Program: 100 points per qualifying 2026 completed service visit, 500 points birthday bonus for eligible customers with birthdays occurring in 2026, and redeemable balance. Always distinguish 2026 annual points from previous years.\n"
+        "3. Detailed Service History: Answer with specific service details (complaint, diagnosis, work performed, parts cost, labour cost, total cost in INR, odometer reading) when asked.\n"
+        "4. Never fabricate or extrapolate facts not present in the provided evidence.\n"
+        "5. When stating facts, cite the specific record identifier (e.g. [Vehicle VIN: ...], [Transaction Ref: ...], [Service Visit #...], [Customer #...]).\n"
+        "6. If the answer cannot be determined from the records, explicitly state: 'The customer records do not contain information regarding [topic].'\n"
+        "7. Be concise, direct, professional, and format key points with bullet points."
     )
 
     full_prompt = (

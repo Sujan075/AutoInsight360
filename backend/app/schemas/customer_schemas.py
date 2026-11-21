@@ -111,7 +111,9 @@ class TransactionDetail(BaseModel):
     vehicle_info: Optional[str] = None
     transaction_type: str
     amount: float
-    currency: str = "USD"
+    currency: str = "INR"
+    original_amount: Optional[float] = None
+    original_currency: Optional[str] = None
     transaction_date: datetime.date
     payment_method: Optional[str] = None
     status: str
@@ -132,8 +134,16 @@ class ServiceVisitDetail(BaseModel):
     service_type: str
     service_date: datetime.date
     mileage_at_service: Optional[int] = None
+    odometer_reading: Optional[int] = None
     cost: Optional[float] = None
+    parts_cost: Optional[float] = None
+    labour_cost: Optional[float] = None
     description: Optional[str] = None
+    service_description: Optional[str] = None
+    customer_complaint: Optional[str] = None
+    diagnosis: Optional[str] = None
+    work_performed: Optional[str] = None
+    service_status: Optional[str] = "completed"
     technician_notes: Optional[str] = None
     is_warranty: bool
     next_service_date: Optional[datetime.date] = None
@@ -151,6 +161,8 @@ class LoyaltyEventDetail(BaseModel):
     description: Optional[str] = None
     related_transaction_id: Optional[int] = None
     related_transaction_ref: Optional[str] = None
+    service_visit_id: Optional[int] = None
+    program_year: Optional[int] = None
     balance_after: int
     created_at: datetime.datetime
 
@@ -178,6 +190,7 @@ class CustomerReviewDetail(BaseModel):
 # Customer 360 Aggregated Metrics
 # ---------------------------------------------------------------------------
 class Customer360Metrics(BaseModel):
+    currency: str = "INR"
     cltv_total: float = 0.0
     cltv_vehicle_spend: float = 0.0
     cltv_service_spend: float = 0.0
@@ -187,13 +200,37 @@ class Customer360Metrics(BaseModel):
     total_vehicles_count: int = 0
     total_services_count: int = 0
     total_service_cost: float = 0.0
+    loyalty_program_year: int = 2026
     loyalty_points_balance: int = 0
+    annual_loyalty_balance: int = 0
+    annual_visit_points: int = 0
+    annual_birthday_points: int = 0
+    annual_redeemed_points: int = 0
+    has_birthday_bonus: bool = False
+    qualifying_visits_2026_count: int = 0
     loyalty_points_earned: int = 0
     loyalty_points_redeemed: int = 0
     total_reviews_count: int = 0
     average_rating: Optional[float] = None
     first_activity_date: Optional[datetime.date] = None
     last_activity_date: Optional[datetime.date] = None
+
+
+# ---------------------------------------------------------------------------
+# Loyalty Redemption Schemas
+# ---------------------------------------------------------------------------
+class LoyaltyRedeemRequest(BaseModel):
+    amount: int = Field(..., gt=0, description="Points to redeem (must be > 0)")
+    notes: Optional[str] = Field(None, max_length=200, description="Optional redemption reason or reward item")
+
+
+class LoyaltyRedeemResponse(BaseModel):
+    status: str
+    customer_id: int
+    redeemed_amount: int
+    remaining_2026_balance: int
+    lifetime_balance: int
+    message: str
 
 
 # ---------------------------------------------------------------------------

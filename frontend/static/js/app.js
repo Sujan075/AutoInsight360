@@ -14,6 +14,8 @@ const state = {
   isImporting: false,
 };
 
+let currentCustomer360 = null;
+
 // DOM Elements Cache
 const DOM = {
   dbStatusPill: document.getElementById("dbStatusPill"),
@@ -122,6 +124,24 @@ const DOM = {
   importSuccessBox: document.getElementById("importSuccessBox"),
   importSuccessMessage: document.getElementById("importSuccessMessage"),
   importSuccessCounts: document.getElementById("importSuccessCounts"),
+
+  // 2026 Annual Loyalty Dashboard & Redemption Modal
+  loyalty2026Balance: document.getElementById("loyalty2026Balance"),
+  loyalty2026VisitPts: document.getElementById("loyalty2026VisitPts"),
+  loyalty2026VisitsSub: document.getElementById("loyalty2026VisitsSub"),
+  loyalty2026BdayPts: document.getElementById("loyalty2026BdayPts"),
+  loyalty2026BdaySub: document.getElementById("loyalty2026BdaySub"),
+  loyalty2026RedeemedPts: document.getElementById("loyalty2026RedeemedPts"),
+  openRedeemModalBtn: document.getElementById("openRedeemModalBtn"),
+  redeemModal: document.getElementById("redeemModal"),
+  closeRedeemModalBtn: document.getElementById("closeRedeemModalBtn"),
+  cancelRedeemBtn: document.getElementById("cancelRedeemBtn"),
+  confirmRedeemBtn: document.getElementById("confirmRedeemBtn"),
+  modalAvailablePts: document.getElementById("modalAvailablePts"),
+  redeemPointsInput: document.getElementById("redeemPointsInput"),
+  redeemNotesInput: document.getElementById("redeemNotesInput"),
+  redeemErrorMsg: document.getElementById("redeemErrorMsg"),
+  redeemSuccessMsg: document.getElementById("redeemSuccessMsg"),
 };
 
 // ==========================================================================
@@ -129,11 +149,11 @@ const DOM = {
 // ==========================================================================
 
 function formatCurrency(amount) {
-  if (amount == null || isNaN(amount)) return "$0.00";
-  return new Intl.NumberFormat("en-US", {
+  if (amount == null || isNaN(amount)) return "₹0.00";
+  return new Intl.NumberFormat("en-IN", {
     style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 2,
+    currency: "INR",
+    maximumFractionDigits: 2,
   }).format(amount);
 }
 
@@ -378,6 +398,9 @@ function renderCustomer360(data) {
   DOM.custLocation.textContent = c.city ? `${c.city}, ${c.state || ""}` : "USA";
   DOM.custJoined.textContent = formatDate(c.registered_at);
 
+  // Track current loaded customer profile
+  currentCustomer360 = data;
+
   // Sync quick select dropdown value
   DOM.quickSelectDropdown.value = c.id;
 
@@ -385,8 +408,9 @@ function renderCustomer360(data) {
   DOM.kpiCltv.textContent = formatCurrency(m.cltv_total);
   DOM.kpiCltvBreakdown.textContent = `Vehicles: ${formatCurrency(m.cltv_vehicle_spend)} • Services: ${formatCurrency(m.cltv_service_spend)}`;
 
-  DOM.kpiLoyaltyBalance.textContent = `${formatNumber(m.loyalty_points_balance)} pts`;
-  DOM.kpiLoyaltySub.textContent = `+${formatNumber(m.loyalty_points_earned)} earned • -${formatNumber(m.loyalty_points_redeemed)} redeemed`;
+  const displayLoyaltyBalance = m.annual_loyalty_balance != null ? m.annual_loyalty_balance : m.loyalty_points_balance;
+  DOM.kpiLoyaltyBalance.textContent = `${formatNumber(displayLoyaltyBalance)} pts`;
+  DOM.kpiLoyaltySub.textContent = `${formatNumber(m.annual_visit_points || 0)} visit • ${formatNumber(m.annual_birthday_points || 0)} bday pts`;
 
   DOM.kpiVehiclesCount.textContent = formatNumber(m.total_vehicles_count);
   const primaryV = data.vehicles.find((v) => v.is_primary) || data.vehicles[0];
@@ -466,23 +490,111 @@ function renderVehiclesTab(vehicles) {
 function renderServicesTab(services) {
   DOM.servicesTableBody.innerHTML = "";
   if (!services || services.length === 0) {
-    DOM.servicesTableBody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-dim); padding: 1.5rem;">No service history records found.</td></tr>`;
+    DOM.servicesTableBody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: var(--text-dim); padding: 1.5rem;">No service history records found.</td></tr>`;
     return;
   }
 
   services.forEach((sv) => {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td class="cell-mono">${formatDate(sv.service_date)}</td>
-      <td><strong>${sv.vehicle_info || "Vehicle"}</strong><br><small class="cell-mono" style="color: var(--text-dim);">${sv.vehicle_vin || ""}</small></td>
-      <td><span class="badge badge-info">${sv.service_type}</span></td>
-      <td class="cell-amount">${formatCurrency(sv.cost)}</td>
+    const mainTr = document.createElement("tr");
+    mainTr.className = "service-row";
+    mainTr.id = `sv-row-${sv.id}`;
+    const statusBadge = (sv.service_status || "completed").toLowerCase() === "completed" ? "badge-success" : "badge-warning";
+    const odometer = sv.odometer_reading != null ? sv.odometer_reading : sv.mileage_at_service;
+
+    mainTr.innerHTML = `
+      <td class="cell-mono">
+        <strong>#${sv.id}</strong><br>
+        <small style="color: var(--text-dim);">${formatDate(sv.service_date)}</small>
+      </td>
+      <td>
+        <strong>${sv.vehicle_info || "Vehicle"}</strong><br>
+        <small class="cell-mono" style="color: var(--text-dim);">${sv.vehicle_vin || ""}</small>
+      </td>
+      <td><span class="badge badge-info">${sv.service_type.replace(/_/g, " ")}</span></td>
+      <td><span class="badge ${statusBadge}">${sv.service_status || "completed"}</span></td>
+      <td class="cell-amount"><strong>${formatCurrency(sv.cost)}</strong></td>
       <td>${sv.dealer_name || "Authorized Dealer"}</td>
-      <td class="cell-mono">${sv.mileage_at_service != null ? `${formatNumber(sv.mileage_at_service)} mi` : "—"}</td>
+      <td class="cell-mono">${odometer != null ? `${formatNumber(odometer)} km/mi` : "—"}</td>
       <td>${sv.is_warranty ? `<span class="badge badge-success">Warranty</span>` : `<span style="color: var(--text-dim);">Standard</span>`}</td>
-      <td><span style="color: var(--text-muted);">${sv.technician_notes || sv.description || "None"}</span></td>
+      <td>
+        <button type="button" class="service-expand-btn" data-svid="${sv.id}" title="Toggle detailed service breakdown">
+          <span>Details</span> <span class="arrow-icon">▾</span>
+        </button>
+      </td>
     `;
-    DOM.servicesTableBody.appendChild(tr);
+
+    // Detail Tray Row
+    const detailTr = document.createElement("tr");
+    detailTr.id = `sv-detail-${sv.id}`;
+    detailTr.className = "service-detail-row";
+    detailTr.style.display = "none";
+
+    detailTr.innerHTML = `
+      <td colspan="9">
+        <div class="service-detail-tray">
+          <div class="service-detail-grid">
+            <!-- Card 1: Customer Complaint & Diagnosis -->
+            <div class="service-detail-card">
+              <h5>⚠️ Customer Complaint</h5>
+              <p style="margin-bottom: 0.6rem;">${sv.customer_complaint || "Not provided"}</p>
+              <h5>🔍 Diagnostic Finding</h5>
+              <p>${sv.diagnosis || "Not provided"}</p>
+            </div>
+
+            <!-- Card 2: Work Performed & Technician Notes -->
+            <div class="service-detail-card">
+              <h5>🛠️ Work Performed</h5>
+              <p style="margin-bottom: 0.6rem;">${sv.work_performed || sv.service_description || sv.description || "Not provided"}</p>
+              <h5>📝 Technician Notes</h5>
+              <p>${sv.technician_notes || "None noted"}</p>
+            </div>
+
+            <!-- Card 3: Financial Breakdown (INR) & Scheduling -->
+            <div class="service-detail-card">
+              <h5>💰 Cost Breakdown (INR)</h5>
+              <div class="cost-breakdown-row">
+                <span>Parts Cost:</span>
+                <span>${sv.parts_cost != null ? formatCurrency(sv.parts_cost) : "Not provided"}</span>
+              </div>
+              <div class="cost-breakdown-row">
+                <span>Labour Cost:</span>
+                <span>${sv.labour_cost != null ? formatCurrency(sv.labour_cost) : "Not provided"}</span>
+              </div>
+              <div class="cost-breakdown-row total">
+                <span>Total Service Cost:</span>
+                <span>${formatCurrency(sv.cost)}</span>
+              </div>
+              <div style="margin-top: 0.6rem;">
+                <h5 style="margin-bottom: 0.2rem;">📅 Recommended Next Service</h5>
+                <p style="font-family: var(--font-mono); font-size: 0.8125rem; color: var(--accent-cyan);">${sv.next_service_date ? formatDate(sv.next_service_date) : "Not scheduled"}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </td>
+    `;
+
+    DOM.servicesTableBody.appendChild(mainTr);
+    DOM.servicesTableBody.appendChild(detailTr);
+  });
+
+  // Attach accordion toggle events
+  DOM.servicesTableBody.querySelectorAll(".service-expand-btn").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const svId = btn.getAttribute("data-svid");
+      const detailRow = document.getElementById(`sv-detail-${svId}`);
+      const arrow = btn.querySelector(".arrow-icon");
+      if (detailRow.style.display === "none") {
+        detailRow.style.display = "table-row";
+        arrow.textContent = "▴";
+        btn.classList.add("expanded");
+      } else {
+        detailRow.style.display = "none";
+        arrow.textContent = "▾";
+        btn.classList.remove("expanded");
+      }
+    });
   });
 }
 
@@ -503,7 +615,7 @@ function renderTransactionsTab(transactions) {
       <td class="cell-mono"><strong>${tx.reference_number || `TXN#${tx.id}`}</strong></td>
       <td class="cell-mono">${formatDate(tx.transaction_date)}</td>
       <td><span class="badge badge-primary">${tx.transaction_type.replace("_", " ")}</span></td>
-      <td class="cell-amount">${formatCurrency(tx.amount)}</td>
+      <td class="cell-amount"><strong>${formatCurrency(tx.amount)}</strong></td>
       <td><span class="badge ${statusBadge}">${tx.status}</span></td>
       <td style="text-transform: capitalize;">${tx.payment_method || "—"}</td>
       <td>${tx.dealer_name || "Dealership"}</td>
@@ -514,6 +626,17 @@ function renderTransactionsTab(transactions) {
 }
 
 function renderLoyaltyTab(loyaltyEvents) {
+  // Update 2026 Annual Dashboard
+  if (currentCustomer360 && currentCustomer360.metrics) {
+    const m = currentCustomer360.metrics;
+    if (DOM.loyalty2026Balance) DOM.loyalty2026Balance.textContent = `${formatNumber(m.annual_loyalty_balance || 0)} pts`;
+    if (DOM.loyalty2026VisitPts) DOM.loyalty2026VisitPts.textContent = `${formatNumber(m.annual_visit_points || 0)} pts`;
+    if (DOM.loyalty2026VisitsSub) DOM.loyalty2026VisitsSub.textContent = `${m.qualifying_visits_2026_count || 0} qualifying visit(s)`;
+    if (DOM.loyalty2026BdayPts) DOM.loyalty2026BdayPts.textContent = `${formatNumber(m.annual_birthday_points || 0)} pts`;
+    if (DOM.loyalty2026BdaySub) DOM.loyalty2026BdaySub.textContent = m.has_birthday_bonus ? "Awarded (+500 pts)" : "Not awarded / Ineligible";
+    if (DOM.loyalty2026RedeemedPts) DOM.loyalty2026RedeemedPts.textContent = `${formatNumber(m.annual_redeemed_points || 0)} pts`;
+  }
+
   DOM.loyaltyTimeline.innerHTML = "";
   if (!loyaltyEvents || loyaltyEvents.length === 0) {
     DOM.loyaltyTimeline.innerHTML = `<div style="color: var(--text-dim); padding: 1rem;">No loyalty events on record.</div>`;
@@ -522,16 +645,20 @@ function renderLoyaltyTab(loyaltyEvents) {
 
   loyaltyEvents.forEach((le) => {
     const isPositive = le.points > 0;
+    const is2026 = le.program_year === 2026 || (le.event_date && le.event_date.startsWith("2026"));
     const item = document.createElement("div");
     item.className = "loyalty-event-row";
     item.innerHTML = `
       <div class="loyalty-event-main">
         <div class="event-icon ${le.event_type}">
-          ${le.event_type === "earn" ? "★" : le.event_type === "redeem" ? "↓" : "✦"}
+          ${le.event_type === "birthday_bonus" ? "🎂" : le.event_type === "visit_reward" ? "🚗" : le.event_type === "earn" ? "★" : le.event_type === "redeem" ? "↓" : "✦"}
         </div>
         <div class="loyalty-event-details">
-          <h5>${le.description || `${le.event_type.toUpperCase()} Points`}</h5>
-          <p>${formatDate(le.event_date)} • ${le.related_transaction_ref ? `Ref: ${le.related_transaction_ref}` : "Automated rule"}</p>
+          <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+            <h5 style="margin: 0;">${le.description || `${le.event_type.toUpperCase()} Points`}</h5>
+            ${is2026 ? `<span class="badge badge-success" style="font-size: 0.65rem;">2026 Program</span>` : `<span class="badge" style="font-size: 0.65rem; background: rgba(255,255,255,0.06); color: var(--text-dim);">Historical</span>`}
+          </div>
+          <p style="margin-top: 0.25rem;">${formatDate(le.event_date)} • ${le.related_transaction_ref ? `Ref: ${le.related_transaction_ref}` : le.service_visit_id ? `Service Visit #${le.service_visit_id}` : "Annual Policy"}</p>
         </div>
       </div>
       <div class="loyalty-event-points">
@@ -1003,6 +1130,144 @@ function bindEventListeners() {
 
   if (DOM.commitImportBtn) {
     DOM.commitImportBtn.addEventListener("click", executeCommitImport);
+  }
+
+  // 2026 Points Redemption Modal Events
+  if (DOM.openRedeemModalBtn) {
+    DOM.openRedeemModalBtn.addEventListener("click", openRedeemModal);
+  }
+  if (DOM.closeRedeemModalBtn) {
+    DOM.closeRedeemModalBtn.addEventListener("click", closeRedeemModal);
+  }
+  if (DOM.cancelRedeemBtn) {
+    DOM.cancelRedeemBtn.addEventListener("click", closeRedeemModal);
+  }
+  if (DOM.confirmRedeemBtn) {
+    DOM.confirmRedeemBtn.addEventListener("click", executePointsRedemption);
+  }
+
+  // Quick chips for redemption
+  document.querySelectorAll(".quick-redeem-chips .chip-btn").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      const p = chip.getAttribute("data-pts");
+      const available = currentCustomer360?.metrics?.annual_loyalty_balance || 0;
+      if (p === "max") {
+        if (DOM.redeemPointsInput) DOM.redeemPointsInput.value = available;
+      } else {
+        const val = parseInt(p, 10);
+        if (!isNaN(val) && DOM.redeemPointsInput) {
+          DOM.redeemPointsInput.value = Math.min(val, available);
+        }
+      }
+    });
+  });
+}
+
+// ==========================================================================
+// Points Redemption Logic
+// ==========================================================================
+
+function openRedeemModal() {
+  if (!currentCustomer360 || !currentCustomer360.customer) {
+    showAlert("Please search and select a customer before redeeming points.", "warning");
+    return;
+  }
+  const available = currentCustomer360.metrics?.annual_loyalty_balance || 0;
+  if (DOM.modalAvailablePts) {
+    DOM.modalAvailablePts.textContent = `${formatNumber(available)} pts`;
+  }
+  if (DOM.redeemPointsInput) {
+    DOM.redeemPointsInput.value = "";
+    DOM.redeemPointsInput.max = available;
+  }
+  if (DOM.redeemNotesInput) {
+    DOM.redeemNotesInput.value = "";
+  }
+  if (DOM.redeemErrorMsg) {
+    DOM.redeemErrorMsg.style.display = "none";
+    DOM.redeemErrorMsg.textContent = "";
+  }
+  if (DOM.redeemSuccessMsg) {
+    DOM.redeemSuccessMsg.style.display = "none";
+    DOM.redeemSuccessMsg.textContent = "";
+  }
+  if (DOM.confirmRedeemBtn) {
+    DOM.confirmRedeemBtn.disabled = false;
+    DOM.confirmRedeemBtn.textContent = "Confirm Redemption";
+  }
+  if (DOM.redeemModal) {
+    DOM.redeemModal.style.display = "flex";
+  }
+}
+
+function closeRedeemModal() {
+  if (DOM.redeemModal) {
+    DOM.redeemModal.style.display = "none";
+  }
+}
+
+async function executePointsRedemption() {
+  if (!currentCustomer360 || !currentCustomer360.customer) return;
+
+  const ptsVal = parseInt(DOM.redeemPointsInput?.value, 10);
+  const notesVal = DOM.redeemNotesInput?.value.trim() || "";
+  const available = currentCustomer360.metrics?.annual_loyalty_balance || 0;
+
+  if (isNaN(ptsVal) || ptsVal <= 0) {
+    showRedeemError("Please enter a valid points amount greater than zero.");
+    return;
+  }
+
+  if (ptsVal > available) {
+    showRedeemError(`Redemption amount (${formatNumber(ptsVal)} pts) exceeds available 2026 balance (${formatNumber(available)} pts).`);
+    return;
+  }
+
+  try {
+    if (DOM.confirmRedeemBtn) {
+      DOM.confirmRedeemBtn.disabled = true;
+      DOM.confirmRedeemBtn.textContent = "Processing...";
+    }
+
+    const resp = await fetch(`/api/customers/${currentCustomer360.customer.id}/loyalty/redeem`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ amount: ptsVal, notes: notesVal }),
+    });
+
+    const data = await resp.json();
+
+    if (!resp.ok) {
+      throw new Error(data.detail || "Redemption request failed.");
+    }
+
+    if (DOM.redeemSuccessMsg) {
+      DOM.redeemSuccessMsg.textContent = `✓ ${data.message || `Successfully redeemed ${formatNumber(ptsVal)} points.`}`;
+      DOM.redeemSuccessMsg.style.display = "block";
+    }
+    if (DOM.redeemErrorMsg) DOM.redeemErrorMsg.style.display = "none";
+
+    // Refresh profile in background and notify
+    setTimeout(async () => {
+      closeRedeemModal();
+      await loadCustomer360(currentCustomer360.customer.id);
+      showAlert(`Redeemed ${formatNumber(ptsVal)} loyalty points successfully.`, "success");
+    }, 1200);
+
+  } catch (err) {
+    showRedeemError(err.message || "Failed to process redemption.");
+  } finally {
+    if (DOM.confirmRedeemBtn) {
+      DOM.confirmRedeemBtn.disabled = false;
+      DOM.confirmRedeemBtn.textContent = "Confirm Redemption";
+    }
+  }
+}
+
+function showRedeemError(msg) {
+  if (DOM.redeemErrorMsg) {
+    DOM.redeemErrorMsg.textContent = msg;
+    DOM.redeemErrorMsg.style.display = "block";
   }
 }
 

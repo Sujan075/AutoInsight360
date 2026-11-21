@@ -37,6 +37,7 @@ from backend.app.schemas.import_schemas import (
     TemplateFileInfo,
     ValidationIssue,
 )
+from backend.app.services.loyalty_service import reconcile_loyalty_rewards
 
 logger = logging.getLogger(__name__)
 
@@ -621,6 +622,12 @@ def process_upload_and_preview(
                 if status not in VALID_TRANSACTION_STATUSES:
                     row_errors.append(f"Invalid status '{status}'. Allowed: {', '.join(VALID_TRANSACTION_STATUSES)}")
 
+                curr = (row.get("currency") or "INR").strip().upper()
+                if curr not in ("INR", "USD"):
+                    row_errors.append(
+                        f"Unsupported transaction currency '{curr}'. AutoInsight360 standard currency is INR (or USD with approved benchmark rate)."
+                    )
+
                 if not row_errors:
                     cleaned_record = {
                         "transaction_ref": tx_ref,
@@ -629,7 +636,7 @@ def process_upload_and_preview(
                         "vehicle_ref": vehicle_ref,
                         "transaction_type": ttype,
                         "amount": amount,
-                        "currency": row.get("currency", "").strip() or "USD",
+                        "currency": curr,
                         "transaction_date": tx_date,
                         "payment_method": row.get("payment_method", "").strip() or None,
                         "status": status,
@@ -673,11 +680,36 @@ def process_upload_and_preview(
                 except ValueError as e:
                     row_errors.append(str(e))
 
+                parts_cost = None
+                try:
+                    parts_cost = _parse_float(row.get("parts_cost"), min_val=0.0)
+                except ValueError as e:
+                    row_errors.append(str(e))
+
+                labour_cost = None
+                try:
+                    labour_cost = _parse_float(row.get("labour_cost"), min_val=0.0)
+                except ValueError as e:
+                    row_errors.append(str(e))
+
+                odometer = None
+                try:
+                    odometer_raw = row.get("odometer_reading") or row.get("mileage_at_service")
+                    odometer = _parse_int(odometer_raw, min_val=0)
+                except ValueError as e:
+                    row_errors.append(str(e))
+
                 next_date = None
                 try:
                     next_date = _parse_date(row.get("next_service_date"))
                 except ValueError as e:
                     row_errors.append(str(e))
+
+                service_desc = (row.get("service_description") or row.get("description") or "").strip() or None
+                cust_complaint = (row.get("customer_complaint") or "").strip() or None
+                diag = (row.get("diagnosis") or "").strip() or None
+                work = (row.get("work_performed") or "").strip() or None
+                svc_status = (row.get("service_status") or "completed").strip().lower()
 
                 if not row_errors:
                     cleaned_record = {
@@ -685,9 +717,17 @@ def process_upload_and_preview(
                         "dealer_ref": dealer_ref,
                         "service_type": stype,
                         "service_date": sdate,
-                        "mileage_at_service": _parse_int(row.get("mileage_at_service"), min_val=0),
+                        "mileage_at_service": odometer,
+                        "odometer_reading": odometer,
                         "cost": cost,
-                        "description": row.get("description", "").strip() or None,
+                        "parts_cost": parts_cost,
+                        "labour_cost": labour_cost,
+                        "description": service_desc,
+                        "service_description": service_desc,
+                        "customer_complaint": cust_complaint,
+                        "diagnosis": diag,
+                        "work_performed": work,
+                        "service_status": svc_status,
                         "technician_notes": row.get("technician_notes", "").strip() or None,
                         "is_warranty": _parse_bool(row.get("is_warranty"), False),
                         "next_service_date": next_date,
@@ -1017,9 +1057,17 @@ def commit_import_session(
                 dealer_id=did,
                 service_type=rec["service_type"],
                 service_date=rec["service_date"],
-                mileage_at_service=rec["mileage_at_service"],
+                mileage_at_service=rec.get("mileage_at_service"),
+                odometer_reading=rec.get("odometer_reading") or rec.get("mileage_at_service"),
                 cost=rec["cost"],
-                description=rec["description"],
+                parts_cost=rec.get("parts_cost"),
+                labour_cost=rec.get("labour_cost"),
+                description=rec.get("description"),
+                service_description=rec.get("service_description") or rec.get("description"),
+                customer_complaint=rec.get("customer_complaint"),
+                diagnosis=rec.get("diagnosis"),
+                work_performed=rec.get("work_performed"),
+                service_status=rec.get("service_status") or "completed",
                 technician_notes=rec["technician_notes"],
                 is_warranty=rec["is_warranty"],
                 next_service_date=rec["next_service_date"],
@@ -1071,7 +1119,10 @@ def commit_import_session(
         # Flush all pending inserts to SQLite session before calculating balances
         db.flush()
 
-        # 8. Recalculate loyalty balance for affected customers
+        # 8. Reconcile Annual 2026 Loyalty Rewards for newly imported visits & birthdays
+        reconcile_loyalty_rewards(db)
+
+        # 9. Recalculate loyalty balance for affected customers
         for cid in affected_cust_ids:
             events = db.query(LoyaltyEvent).filter(LoyaltyEvent.customer_id == cid).all()
             if events:

@@ -34,6 +34,10 @@ from backend.app.schemas.customer_schemas import (
     TransactionDetail,
     VehicleDetail,
 )
+from backend.app.services.loyalty_service import (
+    LOYALTY_PROGRAM_YEAR,
+    get_annual_loyalty_summary,
+)
 
 
 def get_system_health(db: Session, model_available: bool = False, model_name: str = "llama3.1:latest") -> HealthCheckResponse:
@@ -218,6 +222,9 @@ def get_customer_360(db: Session, customer_id: int) -> Optional[Customer360Respo
     loyalty_redeemed = abs(sum(le.points for le in loyalty_events_db if le.points < 0))
     calculated_loyalty_balance = (loyalty_earned - loyalty_redeemed) if loyalty_events_db else customer.loyalty_points_balance
 
+    # 2026 Annual Loyalty Summary
+    loyalty_summary = get_annual_loyalty_summary(db, customer_id, LOYALTY_PROGRAM_YEAR)
+
     avg_rating = (
         round(sum(r.rating for r in reviews_db) / len(reviews_db), 1)
         if reviews_db
@@ -235,6 +242,7 @@ def get_customer_360(db: Session, customer_id: int) -> Optional[Customer360Respo
     last_activity = max(all_dates) if all_dates else None
 
     metrics = Customer360Metrics(
+        currency="INR",
         cltv_total=round(cltv_total, 2),
         cltv_vehicle_spend=round(cltv_vehicle, 2),
         cltv_service_spend=round(cltv_service, 2),
@@ -244,7 +252,14 @@ def get_customer_360(db: Session, customer_id: int) -> Optional[Customer360Respo
         total_vehicles_count=len(vehicles_db),
         total_services_count=len(service_visits_db),
         total_service_cost=round(total_service_cost, 2),
+        loyalty_program_year=LOYALTY_PROGRAM_YEAR,
         loyalty_points_balance=max(0, calculated_loyalty_balance),
+        annual_loyalty_balance=loyalty_summary["annual_balance"],
+        annual_visit_points=loyalty_summary["visit_points_earned"],
+        annual_birthday_points=loyalty_summary["birthday_points_earned"],
+        annual_redeemed_points=loyalty_summary["redeemed_points_year"],
+        has_birthday_bonus=loyalty_summary["has_birthday_bonus"],
+        qualifying_visits_2026_count=loyalty_summary["qualifying_visits_count"],
         loyalty_points_earned=loyalty_earned,
         loyalty_points_redeemed=loyalty_redeemed,
         total_reviews_count=len(reviews_db),
@@ -318,7 +333,9 @@ def get_customer_360(db: Session, customer_id: int) -> Optional[Customer360Respo
                 vehicle_info=v_info,
                 transaction_type=t.transaction_type,
                 amount=float(t.amount),
-                currency=t.currency,
+                currency=t.currency or "INR",
+                original_amount=float(t.amount),
+                original_currency=t.currency or "INR",
                 transaction_date=t.transaction_date,
                 payment_method=t.payment_method,
                 status=t.status,
@@ -342,8 +359,16 @@ def get_customer_360(db: Session, customer_id: int) -> Optional[Customer360Respo
                 service_type=sv.service_type,
                 service_date=sv.service_date,
                 mileage_at_service=sv.mileage_at_service,
+                odometer_reading=getattr(sv, "odometer_reading", None) or sv.mileage_at_service,
                 cost=float(sv.cost) if sv.cost is not None else None,
+                parts_cost=float(sv.parts_cost) if getattr(sv, "parts_cost", None) is not None else None,
+                labour_cost=float(sv.labour_cost) if getattr(sv, "labour_cost", None) is not None else None,
                 description=sv.description,
+                service_description=getattr(sv, "service_description", None) or sv.description,
+                customer_complaint=getattr(sv, "customer_complaint", None),
+                diagnosis=getattr(sv, "diagnosis", None),
+                work_performed=getattr(sv, "work_performed", None),
+                service_status=getattr(sv, "service_status", None) or "completed",
                 technician_notes=sv.technician_notes,
                 is_warranty=sv.is_warranty,
                 next_service_date=sv.next_service_date,
@@ -363,6 +388,8 @@ def get_customer_360(db: Session, customer_id: int) -> Optional[Customer360Respo
                 description=le.description,
                 related_transaction_id=le.related_transaction_id,
                 related_transaction_ref=tx_ref_map.get(le.related_transaction_id),
+                service_visit_id=getattr(le, "service_visit_id", None),
+                program_year=getattr(le, "program_year", None) or le.event_date.year,
                 balance_after=le.balance_after,
                 created_at=le.created_at,
             )

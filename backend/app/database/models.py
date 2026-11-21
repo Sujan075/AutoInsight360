@@ -271,7 +271,7 @@ class Transaction(Base):
         String(50), nullable=False
     )  # vehicle_purchase | service_payment | parts | accessories | financing
     amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
-    currency: Mapped[str] = mapped_column(String(10), nullable=False, default="USD")
+    currency: Mapped[str] = mapped_column(String(10), nullable=False, default="INR")
     transaction_date: Mapped[datetime.date] = mapped_column(Date, nullable=False)
     payment_method: Mapped[Optional[str]] = mapped_column(
         String(30), nullable=True
@@ -332,8 +332,18 @@ class ServiceVisit(Base):
     )  # oil_change | tyre_rotation | brake_inspection | major_service | recall | warranty | repair
     service_date: Mapped[datetime.date] = mapped_column(Date, nullable=False)
     mileage_at_service: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    odometer_reading: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     cost: Mapped[Optional[float]] = mapped_column(Numeric(10, 2), nullable=True)
+    parts_cost: Mapped[Optional[float]] = mapped_column(Numeric(10, 2), nullable=True)
+    labour_cost: Mapped[Optional[float]] = mapped_column(Numeric(10, 2), nullable=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    service_description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    customer_complaint: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    diagnosis: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    work_performed: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    service_status: Mapped[Optional[str]] = mapped_column(
+        String(30), nullable=True, default="completed"
+    )  # completed | in_progress | scheduled | cancelled
     technician_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     is_warranty: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     next_service_date: Mapped[Optional[datetime.date]] = mapped_column(Date, nullable=True)
@@ -382,7 +392,7 @@ class LoyaltyEvent(Base):
     # -- Event details -------------------------------------------------------
     event_type: Mapped[str] = mapped_column(
         String(30), nullable=False
-    )  # earn | redeem | adjustment | expiry | bonus
+    )  # earn | redeem | adjustment | expiry | bonus | visit_reward | birthday_bonus
     points: Mapped[int] = mapped_column(
         Integer, nullable=False
     )  # positive = earn, negative = redeem/expiry
@@ -391,6 +401,10 @@ class LoyaltyEvent(Base):
     related_transaction_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("transactions.id", ondelete="SET NULL"), nullable=True
     )
+    service_visit_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("service_visits.id", ondelete="SET NULL"), nullable=True
+    )
+    program_year: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     balance_after: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     # -- Timestamps ---------------------------------------------------------

@@ -8,7 +8,7 @@ An AI-powered customer intelligence system that provides unified automotive cust
 
 ## Current Status
 
-**Phase 2.1 — Dynamic Data Ingestion, UI Corrections & End-to-End Validation** ✅ Complete
+**Phase 2.2 — Judge Feedback Implementation: INR, Service History & Annual Loyalty** ✅ Complete
 
 | Phase | Description | Status |
 |---|---|---|
@@ -17,19 +17,23 @@ An AI-powered customer intelligence system that provides unified automotive cust
 | Phase 1.1 | Seed Data Idempotency Audit | ✅ Complete |
 | Phase 2 | Full-Stack Application (FastAPI + Vanilla JS + Llama 3.1) | ✅ Complete |
 | Phase 2.1 | Dynamic Data Ingestion, UI Corrections & E2E Validation | ✅ Complete |
+| Phase 2.2 | Judge Feedback Implementation (INR, Service History, 2026 Loyalty) | ✅ Complete |
 | Phase 3 | Advanced Multi-Agent Intelligence Workflows | 🔜 Planned |
 
 ---
 
 ## Core Features
 
+- **Indian Rupee (INR ₹) Standardisation**: Comprehensive conversion of all financial presentation to Indian Rupees across CLTV, transactions, service/labour/parts costs, import previews, and AI responses using authentic Indian numbering grouping (`₹1,45,000.00`). Backed by an explicit currency policy with RBI benchmark conversion (1 USD = ₹84.00) and unsupported foreign currency rejection.
+- **Detailed Service History**: Granular automotive service records with optional customer complaint, technical diagnosis, work performed, service completion status, parts cost, labour cost, odometer reading, and next service date, backed by backward-compatible CSV ingestion and interactive expandable UI accordions.
+- **2026 Annual Loyalty Points Program & Birthday Bonus**: Year-isolated loyalty accounting featuring 100 points per completed 2026 service visit, 500 birthday bonus points awarded for birthdays occurring in 2026, dynamic annual balance calculation (`2026 Visits + 2026 Birthday - 2026 Redeemed`), and controlled point redemption via API and modal UI.
 - **Dynamic Automotive Data Ingestion**: Upload, validate, preview, and transactionally commit external automotive datasets via canonical CSV ZIP archives.
 - **Downloadable Canonical CSV Templates**: Pre-configured CSV templates for all 7 entities (`customers.csv`, `vehicles.csv`, `dealers.csv`, `transactions.csv`, `service_visits.csv`, `loyalty_events.csv`, `customer_reviews.csv`).
 - **Source-ID-to-Database-ID Mapping**: Relational mapping preserves cross-entity foreign keys regardless of internal database primary key auto-increments.
 - **Multi-Stage Validation & Safe Transactions**: Atomic rollbacks prevent partial writes on failure; row-by-row error and warning diagnostics.
-- **Genuine System Status Badges**: Primary header dynamically reports `Database: Connected` and `Llama 3.1: Ready`, moving detailed counts to the Import / Admin panel.
+- **Genuine System Status Badges**: Primary header dynamically reports `Database: Connected`, `Currency: INR (₹)`, and `Llama 3.1: Ready`.
 - **Unified Customer 360 Lookup**: Demographics, contact preferences, segment, status.
-- **Historical Customer Value (CLTV)**: Calculated from completed vehicle purchases, service payments, parts, and accessories.
+- **Historical Customer Value (CLTV)**: Calculated from completed vehicle purchases, service payments, parts, and accessories in INR.
 - **Vehicle Ownership**: Full specifications, VIN, fuel type, mileage, primary vehicle designation.
 - **Automotive Service History**: Maintenance records, service types, costs, dealer associations, warranty coverage, and technician notes.
 - **Loyalty Points & History**: Real-time points balance, points earned, points redeemed, and chronological audit log.
@@ -55,7 +59,7 @@ An AI-powered customer intelligence system that provides unified automotive cust
 | AI / LLM | Ollama (Local) | 0.40.16 |
 | Foundation Model | Llama 3.1 | `llama3.1:latest` (8B) |
 | Frontend | HTML5, Modern CSS3, Vanilla JavaScript | Responsive SPA |
-| Testing | pytest | 8.3.4 (77 tests passed) |
+| Testing | pytest | 8.3.4 (98 tests passed - 100%) |
 
 ---
 

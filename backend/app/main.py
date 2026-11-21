@@ -22,13 +22,16 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 
 from backend.app.agents.customer_agent import check_ollama_status, query_customer_agent
-from backend.app.database.connection import get_db
+from backend.app.database.connection import engine, get_db
+from backend.app.database.migrations import run_schema_migrations
 from backend.app.schemas.customer_schemas import (
     AgentQueryRequest,
     AgentQueryResponse,
     Customer360Response,
     CustomerSummaryResponse,
     HealthCheckResponse,
+    LoyaltyRedeemRequest,
+    LoyaltyRedeemResponse,
 )
 from backend.app.schemas.import_schemas import (
     ImportCommitRequest,
@@ -45,6 +48,10 @@ from backend.app.services.import_service import (
     commit_import_session,
     get_template_catalog,
     process_upload_and_preview,
+)
+from backend.app.services.loyalty_service import (
+    redeem_loyalty_points,
+    reconcile_loyalty_rewards,
 )
 
 logger = logging.getLogger("autoinsight360")
@@ -77,6 +84,15 @@ BASE_DIR = Path(__file__).resolve().parents[2]  # AutoInsight360/
 FRONTEND_DIR = BASE_DIR / "frontend"
 STATIC_DIR = FRONTEND_DIR / "static"
 TEMPLATES_DIR = BASE_DIR / "data" / "templates"
+
+
+@app.on_event("startup")
+def on_startup():
+    """Apply safe additive schema migrations on application boot."""
+    try:
+        run_schema_migrations(engine)
+    except Exception as e:
+        logger.warning("Startup schema migration check encountered: %s", e)
 
 
 # ---------------------------------------------------------------------------
@@ -142,6 +158,70 @@ def api_get_customer_360(
         )
 
     return profile
+
+
+@app.post(
+    "/api/customers/{customer_id}/loyalty/redeem",
+    response_model=LoyaltyRedeemResponse,
+    tags=["Loyalty"],
+)
+def api_redeem_loyalty_points(
+    customer_id: int,
+    payload: LoyaltyRedeemRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Redeem available loyalty points for a customer against their 2026 annual balance.
+    Validates balance sufficiency and logs a transaction ledger record.
+    """
+    if customer_id <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Customer ID must be a positive integer.",
+        )
+
+    try:
+        result = redeem_loyalty_points(
+            db=db,
+            customer_id=customer_id,
+            amount=payload.amount,
+            notes=payload.notes,
+        )
+        return LoyaltyRedeemResponse(**result)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+    except Exception as e:
+        logger.exception("Error redeeming points for customer #%d: %s", customer_id, e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to process loyalty redemption: {e}",
+        )
+
+
+@app.post(
+    "/api/loyalty/reconcile",
+    tags=["Loyalty"],
+)
+def api_reconcile_loyalty(
+    customer_id: Optional[int] = Query(None, description="Optional customer ID to reconcile"),
+    db: Session = Depends(get_db),
+):
+    """
+    Trigger loyalty points reconciliation for 2026 visit rewards and birthday bonuses.
+    Guaranteed safe and idempotent to run repeatedly.
+    """
+    try:
+        summary = reconcile_loyalty_rewards(db=db, customer_id=customer_id)
+        return summary
+    except Exception as e:
+        logger.exception("Error during loyalty reconciliation: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Loyalty reconciliation failed: {e}",
+        )
 
 
 @app.post(

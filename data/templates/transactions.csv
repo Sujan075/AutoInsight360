@@ -1,4 +1,4 @@
 transaction_ref,customer_ref,dealer_ref,vehicle_ref,transaction_type,amount,currency,transaction_date,payment_method,status,notes
-TXN-9001-A1,CUST-001,DLR-01,VEH-01,vehicle_purchase,48500.00,USD,2023-04-10,finance,completed,Purchased 2023 Toyota RAV4 Prime
-TXN-9002-B1,CUST-001,DLR-01,VEH-01,service_payment,350.00,USD,2023-10-15,card,completed,Scheduled 10k maintenance
-TXN-9003-C1,CUST-002,DLR-02,VEH-02,vehicle_purchase,36200.00,USD,2022-08-15,lease,completed,Leased 2022 Honda Accord Hybrid
+TXN-9001-A1,CUST-001,DLR-01,VEH-01,vehicle_purchase,3850000.00,INR,2023-04-10,finance,completed,Purchased 2023 Toyota RAV4 Prime
+TXN-9002-B1,CUST-001,DLR-01,VEH-01,service_payment,28500.00,INR,2023-10-15,card,completed,Scheduled 10k maintenance
+TXN-9003-C1,CUST-002,DLR-02,VEH-02,vehicle_purchase,2900000.00,INR,2022-08-15,lease,completed,Leased 2022 Honda Accord Hybrid
