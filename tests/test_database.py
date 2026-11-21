@@ -431,3 +431,149 @@ class TestIdempotency:
         assert count_before == count_after, (
             f"Dealer count changed from {count_before} to {count_after} after re-seed"
         )
+
+    def test_customer_seed_idempotent(self, db_session: Session):
+        """Running seed_customers again should not add duplicate customer rows."""
+        import random
+        from backend.app.database.seed_data import seed_customers
+
+        count_before = db_session.query(Customer).count()
+        seed_customers(db_session, random.Random(42), count=count_before)
+        count_after = db_session.query(Customer).count()
+        assert count_before == count_after, (
+            f"Customer count changed from {count_before} to {count_after} after re-seed"
+        )
+
+    def test_vehicle_seed_idempotent(self, db_session: Session):
+        """Running seed_vehicles again should not add duplicate vehicles."""
+        import random
+        from backend.app.database.seed_data import seed_vehicles
+
+        customers = db_session.query(Customer).all()
+        count_before = db_session.query(Vehicle).count()
+        seed_vehicles(db_session, random.Random(42), customers)
+        count_after = db_session.query(Vehicle).count()
+        assert count_before == count_after, (
+            f"Vehicle count changed from {count_before} to {count_after} after re-seed"
+        )
+
+    def test_transaction_seed_idempotent(self, db_session: Session):
+        """Running seed_transactions again should not add duplicate transactions."""
+        import random
+        from backend.app.database.seed_data import seed_transactions
+
+        customers = db_session.query(Customer).all()
+        vehicles = db_session.query(Vehicle).all()
+        dealers = db_session.query(Dealer).all()
+        count_before = db_session.query(Transaction).count()
+        seed_transactions(
+            db_session, random.Random(42), customers, vehicles, dealers, target_count=count_before
+        )
+        count_after = db_session.query(Transaction).count()
+        assert count_before == count_after, (
+            f"Transaction count changed from {count_before} to {count_after} after re-seed"
+        )
+
+    def test_service_visit_seed_idempotent(self, db_session: Session):
+        """Running seed_service_visits again should not add duplicate service visits."""
+        import random
+        from backend.app.database.seed_data import seed_service_visits
+
+        vehicles = db_session.query(Vehicle).all()
+        dealers = db_session.query(Dealer).all()
+        count_before = db_session.query(ServiceVisit).count()
+        seed_service_visits(
+            db_session, random.Random(42), vehicles, dealers, target_count=count_before
+        )
+        count_after = db_session.query(ServiceVisit).count()
+        assert count_before == count_after, (
+            f"ServiceVisit count changed from {count_before} to {count_after} after re-seed"
+        )
+
+    def test_loyalty_event_seed_idempotent(self, db_session: Session):
+        """Running seed_loyalty_events again should not add duplicate loyalty events."""
+        import random
+        from backend.app.database.seed_data import seed_loyalty_events
+
+        customers = db_session.query(Customer).all()
+        transactions = db_session.query(Transaction).all()
+        count_before = db_session.query(LoyaltyEvent).count()
+        seed_loyalty_events(
+            db_session, random.Random(42), customers, transactions, target_count=count_before
+        )
+        count_after = db_session.query(LoyaltyEvent).count()
+        assert count_before == count_after, (
+            f"LoyaltyEvent count changed from {count_before} to {count_after} after re-seed"
+        )
+
+    def test_review_seed_idempotent(self, db_session: Session):
+        """Running seed_reviews again should not add duplicate reviews."""
+        import random
+        from backend.app.database.seed_data import seed_reviews
+
+        customers = db_session.query(Customer).all()
+        dealers = db_session.query(Dealer).all()
+        vehicles = db_session.query(Vehicle).all()
+        count_before = db_session.query(CustomerReview).count()
+        seed_reviews(
+            db_session, random.Random(42), customers, dealers, vehicles, target_count=count_before
+        )
+        count_after = db_session.query(CustomerReview).count()
+        assert count_before == count_after, (
+            f"CustomerReview count changed from {count_before} to {count_after} after re-seed"
+        )
+
+    def test_full_seed_database_idempotent_isolated(self):
+        """Running seed_database twice on a fresh isolated database produces identical counts."""
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
+        from backend.app.database.base import Base
+        from backend.app.database.seed_data import seed_database
+
+        test_engine = create_engine("sqlite:///:memory:")
+        Base.metadata.create_all(bind=test_engine)
+        Session = sessionmaker(bind=test_engine)
+        session = Session()
+
+        try:
+            # First seed run
+            counts_run1 = seed_database(session)
+            db_counts_run1 = {
+                "dealers": session.query(Dealer).count(),
+                "customers": session.query(Customer).count(),
+                "vehicles": session.query(Vehicle).count(),
+                "transactions": session.query(Transaction).count(),
+                "service_visits": session.query(ServiceVisit).count(),
+                "loyalty_events": session.query(LoyaltyEvent).count(),
+                "customer_reviews": session.query(CustomerReview).count(),
+            }
+            assert counts_run1 == db_counts_run1
+
+            # Second seed run
+            counts_run2 = seed_database(session)
+            db_counts_run2 = {
+                "dealers": session.query(Dealer).count(),
+                "customers": session.query(Customer).count(),
+                "vehicles": session.query(Vehicle).count(),
+                "transactions": session.query(Transaction).count(),
+                "service_visits": session.query(ServiceVisit).count(),
+                "loyalty_events": session.query(LoyaltyEvent).count(),
+                "customer_reviews": session.query(CustomerReview).count(),
+            }
+
+            # Verify complete idempotency: every table count is unchanged
+            assert counts_run2 == counts_run1
+            assert db_counts_run2 == db_counts_run1
+
+            # Verify expected target counts
+            assert db_counts_run2["dealers"] == 5
+            assert db_counts_run2["customers"] == 100
+            assert db_counts_run2["vehicles"] == 161
+            assert db_counts_run2["transactions"] == 400
+            assert db_counts_run2["service_visits"] == 300
+            assert db_counts_run2["loyalty_events"] == 413
+            assert db_counts_run2["customer_reviews"] == 150
+        finally:
+            session.close()
+            Base.metadata.drop_all(bind=test_engine)
+            test_engine.dispose()

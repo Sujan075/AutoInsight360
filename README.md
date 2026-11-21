@@ -173,11 +173,12 @@ python scripts/init_db.py --no-seed
 python scripts/init_db.py --reset
 ```
 
-> **Warning:** `--reset` permanently deletes all existing data. The script will prompt for confirmation before proceeding.
+> **Warning:** `--reset` permanently deletes all existing data. The script prompts the user to type `'yes'` to confirm before proceeding.
+> For non-interactive environments, `--yes` (or `-y`) can be passed alongside `--reset` to explicitly confirm the operation.
 
 ---
 
-## Synthetic Data Generation
+## Synthetic Data Generation & Idempotency
 
 The synthetic data generator is located at:
 
@@ -189,19 +190,25 @@ It is called automatically by `scripts/init_db.py`.
 
 The generator creates interconnected records with valid foreign-key relationships:
 
-| Entity | Demo Target |
-|---|---|
-| Dealers | 5 |
-| Customers | 100 |
-| Vehicles | 100–150 |
-| Transactions | ~400 |
-| Service Visits | ~300 |
-| Loyalty Events | ~400+ |
-| Customer Reviews | ~150 |
+| Entity | Demo Target | Idempotency Strategy |
+|---|---|---|
+| Dealers | 5 | Unique name lookup; skips existing |
+| Customers | 100 | Target count check & deterministic emails; skips if count >= target |
+| Vehicles | 100–150 (161) | Customer ownership check; skips customers with existing vehicles |
+| Transactions | ~400 | Target count check & unique reference tracking; skips if count >= target |
+| Service Visits | ~300 | Target count check; skips if count >= target |
+| Loyalty Events | ~400+ (413) | Target count check; skips if count >= target |
+| Customer Reviews | ~150 | Target count check; skips if count >= target |
 
 Data generation uses a fixed random seed (`42`) for reproducibility.
 
-Re-running the seed process is **idempotent**: existing records are not duplicated.
+### Idempotency Guarantee
+
+Re-running the seed process is **fully idempotent across all tables**:
+- Existing tables and records are inspected prior to insertion.
+- When target counts or existing entities are already present, seeding logs the existing count and safely skips insertion.
+- Running the seed process repeatedly produces 0 duplicate records and preserves referential integrity.
+- Tests in `tests/test_database.py::TestIdempotency` explicitly test both per-table and end-to-end multi-run seed idempotency.
 
 ---
 
@@ -244,7 +251,7 @@ Tests use an **in-memory SQLite database** — they are isolated from the develo
 | `TestForeignKeys` | Referential integrity across all relationships |
 | `TestRelationships` | ORM relationship traversal |
 | `TestCustomer360Query` | Full end-to-end Customer 360 retrieval |
-| `TestIdempotency` | Re-seeding does not create duplicates |
+| `TestIdempotency` | Re-seeding does not create duplicates (8 tests covering all entities + full database) |
 
 ---
 

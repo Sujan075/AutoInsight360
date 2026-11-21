@@ -359,25 +359,26 @@ def seed_dealers(db: Session) -> list[Dealer]:
 
 
 def seed_customers(db: Session, rng: random.Random, count: int = 100) -> list[Customer]:
-    """Seed synthetic customers.  Idempotent: skip emails already in database."""
-    customers: list[Customer] = []
-    existing_emails = {r[0] for r in db.query(Customer.email).all()}
+    """Seed synthetic customers.  Idempotent: returns existing if already at target count."""
+    existing_count = db.query(Customer).count()
+    if existing_count >= count:
+        logger.info(
+            "Customers already seeded (%d >= %d target).", existing_count, count
+        )
+        return db.query(Customer).order_by(Customer.id).all()
+
+    customers: list[Customer] = list(db.query(Customer).order_by(Customer.id).all())
+    existing_emails = {c.email for c in customers}
 
     today = datetime.date.today()
     dob_start = today.replace(year=today.year - 70)
     dob_end = today.replace(year=today.year - 18)
 
-    index = db.query(Customer).count()  # offset index for unique emails
-
     for i in range(count):
         first = rng.choice(_FIRST_NAMES)
         last = rng.choice(_LAST_NAMES)
-        email = _synth_email(first, last, index + i + 1)
+        email = _synth_email(first, last, i + 1)
         if email in existing_emails:
-            # Still count the skip against total so we don't under-seed on reruns
-            existing = db.query(Customer).filter(Customer.email == email).first()
-            if existing:
-                customers.append(existing)
             continue
 
         city, state = rng.choice(_CITIES_STATES)
@@ -408,6 +409,10 @@ def seed_customers(db: Session, rng: random.Random, count: int = 100) -> list[Cu
         )
         db.add(customer)
         customers.append(customer)
+        existing_emails.add(email)
+
+        if len(customers) >= count:
+            break
 
     db.commit()
     logger.info("Customers ready: %d total.", len(customers))
@@ -424,20 +429,36 @@ def seed_vehicles(
 
     - Each customer gets 1–2 vehicles; some premium customers get 3.
     - One vehicle per customer is flagged as primary.
-    - Idempotent: existing VINs are skipped.
+    - Idempotent: customers who already have vehicles are skipped.
     """
-    vehicles: list[Vehicle] = []
-    existing_vins = {r[0] for r in db.query(Vehicle.vin).all()}
-    vin_index = db.query(Vehicle).count()
+    existing_vehicles = list(db.query(Vehicle).order_by(Vehicle.id).all())
+    existing_customer_ids = {v.customer_id for v in existing_vehicles}
+
+    # If all provided customers already have vehicles, return existing
+    if customers and all(c.id in existing_customer_ids for c in customers):
+        logger.info(
+            "Vehicles already seeded (%d vehicles for %d customers).",
+            len(existing_vehicles),
+            len(customers),
+        )
+        return existing_vehicles
+
+    vehicles: list[Vehicle] = list(existing_vehicles)
+    existing_vins = {v.vin for v in existing_vehicles}
+    vin_index = len(existing_vehicles)
     today = datetime.date.today()
 
     for customer in customers:
+        if customer.id in existing_customer_ids:
+            continue
+
         num_vehicles = rng.choices([1, 2, 3], weights=[55, 35, 10])[0]
         for v_i in range(num_vehicles):
             vin_index += 1
             vin = _synth_vin(rng, vin_index)
-            if vin in existing_vins:
-                continue
+            while vin in existing_vins:
+                vin_index += 1
+                vin = _synth_vin(rng, vin_index)
 
             make, model, body_style, fuel_type = rng.choice(_VEHICLE_DATA)
             year = rng.randint(2008, 2025)
@@ -476,6 +497,7 @@ def seed_vehicles(
             db.add(vehicle)
             vehicles.append(vehicle)
             existing_vins.add(vin)
+            existing_customer_ids.add(customer.id)
 
     db.commit()
     logger.info("Vehicles ready: %d total.", len(vehicles))
@@ -496,11 +518,18 @@ def seed_transactions(
     Transaction distribution:
     - Vehicle purchase transactions are linked to a vehicle.
     - Service payments and parts are common repeat transactions.
-    - Idempotent: existing reference numbers are skipped.
+    - Idempotent: returns existing if already at target count.
     """
-    transactions: list[Transaction] = []
-    existing_refs = {r[0] for r in db.query(Transaction.reference_number).all()}
-    tx_index = db.query(Transaction).count()
+    existing_count = db.query(Transaction).count()
+    if existing_count >= target_count:
+        logger.info(
+            "Transactions already seeded (%d >= %d target).", existing_count, target_count
+        )
+        return db.query(Transaction).order_by(Transaction.id).all()
+
+    transactions: list[Transaction] = list(db.query(Transaction).order_by(Transaction.id).all())
+    existing_refs = {t.reference_number for t in transactions}
+    tx_index = len(transactions)
     today = datetime.date.today()
 
     # Build a lookup: customer_id → list of vehicles
@@ -508,12 +537,13 @@ def seed_transactions(
     for v in vehicles:
         cust_to_vehicles.setdefault(v.customer_id, []).append(v)
 
-    generated = 0
-    for _ in range(target_count):
+    needed = target_count - len(transactions)
+    for _ in range(needed):
         tx_index += 1
         ref = _synth_ref(rng, "TXN", tx_index)
-        if ref in existing_refs:
-            continue
+        while ref in existing_refs:
+            tx_index += 1
+            ref = _synth_ref(rng, "TXN", tx_index)
 
         customer = rng.choice(customers)
         dealer = rng.choice(dealers)
@@ -556,7 +586,6 @@ def seed_transactions(
         db.add(transaction)
         transactions.append(transaction)
         existing_refs.add(ref)
-        generated += 1
 
     db.commit()
     logger.info("Transactions ready: %d total.", len(transactions))
@@ -836,13 +865,13 @@ def seed_database(db: Session, reset: bool = False) -> dict:
     reviews = seed_reviews(db, rng, customers, dealers, vehicles, target_count=150)
 
     counts = {
-        "dealers": len(dealers),
-        "customers": len(customers),
-        "vehicles": len(vehicles),
-        "transactions": len(transactions),
-        "service_visits": len(service_visits),
-        "loyalty_events": len(loyalty_events),
-        "customer_reviews": len(reviews),
+        "dealers": db.query(Dealer).count(),
+        "customers": db.query(Customer).count(),
+        "vehicles": db.query(Vehicle).count(),
+        "transactions": db.query(Transaction).count(),
+        "service_visits": db.query(ServiceVisit).count(),
+        "loyalty_events": db.query(LoyaltyEvent).count(),
+        "customer_reviews": db.query(CustomerReview).count(),
     }
 
     logger.info("=== Seed complete: %s ===", counts)

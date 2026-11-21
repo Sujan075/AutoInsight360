@@ -59,6 +59,12 @@ def parse_args() -> argparse.Namespace:
         help="Drop all tables and re-create from scratch. DESTRUCTIVE — requires confirmation.",
     )
     parser.add_argument(
+        "--yes",
+        "-y",
+        action="store_true",
+        help="Explicitly confirm reset without interactive prompt.",
+    )
+    parser.add_argument(
         "--no-seed",
         action="store_true",
         help="Create tables but do not seed synthetic data.",
@@ -66,8 +72,10 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def confirm_reset() -> bool:
+def confirm_reset(explicit_yes: bool = False) -> bool:
     """Ask the user to confirm a destructive reset operation."""
+    if explicit_yes:
+        return True
     print("\n" + "=" * 60)
     print("  WARNING: --reset will PERMANENTLY DELETE all existing data.")
     print("  The database will be dropped and recreated from scratch.")
@@ -85,7 +93,7 @@ def main() -> None:
 
     # -- Handle reset --------------------------------------------------------
     if args.reset:
-        if not confirm_reset():
+        if not confirm_reset(explicit_yes=args.yes):
             logger.info("Reset cancelled by user.")
             sys.exit(0)
         logger.warning("Resetting database...")
