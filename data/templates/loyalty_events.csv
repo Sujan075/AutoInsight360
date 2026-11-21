@@ -1,0 +1,4 @@
+customer_ref,event_type,points,event_date,description,transaction_ref,balance_after
+CUST-001,earn,100,2023-04-10,Vehicle purchase points bonus,TXN-9001-A1,100
+CUST-001,earn,50,2023-10-15,Service visit loyalty reward,TXN-9002-B1,150
+CUST-002,earn,85,2022-08-15,New customer onboarding loyalty points,TXN-9003-C1,85

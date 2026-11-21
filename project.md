@@ -1,47 +1,134 @@
 # AutoInsight360
 
-Automotive Customer 360 Intelligence Agent.
+**Automotive Customer 360 Intelligence Agent**
 
-An AI-powered customer intelligence system that retrieves automotive
-customer data and generates evidence-backed insights using a locally
-running LLM.
+An AI-powered customer intelligence system that retrieves automotive customer data and generates evidence-backed insights using a locally running LLM.
+
+---
 
 ## Project Status
 
-Phase 0 - Project Setup
+**Phase 2.1 — Dynamic Data Ingestion, UI Corrections & End-to-End Validation** ✅ Complete
+
+| Phase | Description | Status |
+|---|---|---|
+| Phase 0 | Project Setup & Specification | ✅ Complete |
+| Phase 1 | Database Foundation (SQLite + SQLAlchemy 2.0) | ✅ Complete |
+| Phase 1.1 | Seed Data Idempotency Audit | ✅ Complete |
+| Phase 2 | Full-Stack Application (FastAPI + Vanilla JS + Llama 3.1) | ✅ Complete |
+| Phase 2.1 | Dynamic Data Ingestion, UI Corrections & E2E Validation | ✅ Complete |
+| Phase 3 | Advanced Multi-Agent Intelligence Workflows | 🔜 Planned |
+
+---
 
 ## Core Features
 
-- Customer 360 lookup
-- Customer Lifetime Value (historical proxy)
-- Loyalty points and loyalty history
-- Vehicle information
-- Service history
-- Customer insights using local AI
-- Natural language querying
-- Evidence-grounded responses
-- Security guardrails
-- Audit logging
+- **Dynamic Automotive Data Ingestion**: Upload, validate, preview, and transactionally commit external automotive datasets via canonical CSV ZIP archives.
+- **Downloadable CSV Templates**: Pre-packaged CSV templates for all 7 entities (`customers`, `vehicles`, `dealers`, `transactions`, `service_visits`, `loyalty_events`, `customer_reviews`).
+- **Source-ID-to-Database-ID Mapping**: Relational mapping preserves cross-entity foreign keys regardless of internal database primary key auto-increments.
+- **Multi-Stage Validation & Safe Transactions**: Atomic rollbacks prevent partial writes on failure; row-by-row error and warning diagnostics.
+- **Genuine System Status Badges**: Primary header dynamically reports `Database: Connected` and `Llama 3.1: Ready`, moving detailed counts to administrative panels.
+- **Unified Customer 360 Profile**: Demographics, contact preferences, customer segment, account status.
+- **Historical Customer Lifetime Value (CLTV)**: Calculated from actual completed vehicle purchases, service payments, parts, and accessories.
+- **Vehicle Ownership Records**: Complete specifications (VIN, year, make, model, trim, fuel type, mileage, primary vehicle designation).
+- **Automotive Service History**: Maintenance records, service types, costs, dealer associations, warranty coverage, and technician notes.
+- **Loyalty Points & Audit History**: Real-time points balance, points earned, points redeemed, and chronological audit trail.
+- **Customer Reviews & Feedback**: Star ratings (1–5★), feedback text, dealer/vehicle links, and verified customer badges.
+- **Local AI Customer Insights Assistant**: Natural-language intelligence assistant powered by local Ollama (Llama 3.1).
+- **Evidence-Grounded AI Responses**: Cites specific database record identifiers (`[Vehicle VIN: ...]`, `[Transaction Ref: ...]`, `[Service Visit #...]`, `[Review #...]`).
+- **Security & Guardrails**: Read-only database access via approved Python services; no arbitrary SQL execution; input validation and query length constraints.
+- **Audit Logging**: Structured query responses with cited evidence records and model metadata.
+
+---
 
 ## Technology Stack
 
-- Python
-- FastAPI
-- Uvicorn
-- SQLite
-- SQLAlchemy
-- Ollama
-- Llama model
-- HTML
-- CSS
-- JavaScript
+| Layer | Component | Technology | Version / Details |
+|---|---|---|---|
+| Backend | Runtime & Language | Python | 3.13 |
+| Backend | Web Framework | FastAPI | 0.115.11 |
+| Backend | ASGI Server | Uvicorn | 0.34.0 |
+| Backend | Data Validation | Pydantic v2 | 2.10.6 |
+| Backend | Multipart Forms | python-multipart | 0.0.34 |
+| Database | Storage | SQLite (MVP) | `data/autoinsight360.db` |
+| Database | ORM | SQLAlchemy | 2.0.40 |
+| AI / LLM | Local Inference | Ollama | 0.40.16 |
+| AI / LLM | Foundation Model | Llama 3.1 | `llama3.1:latest` (8B) |
+| Frontend | UI Architecture | Single-Page Application (SPA) | HTML5, CSS3, Vanilla JavaScript |
+| Testing | Test Runner | pytest | 8.3.4 (77 tests passed) |
 
-## Documentation
+---
 
-See `project.md` for the complete PRD, architecture, ERD,
-implementation plan, requirements, guardrails and demo plan.
+## API Specification
 
-## Data Privacy
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/health` | Health check: SQLite connection status, row counts, and Ollama model status. |
+| `GET` | `/api/customers/search` | Search customers by name, customer ID, email, phone, or VIN. Supports `q` and `limit`. |
+| `GET` | `/api/customers/{customer_id}/360` | Full Customer 360 profile: demographics, metrics, vehicles, transactions, services, loyalty, and reviews. |
+| `POST` | `/api/agent/query` | Evidence-grounded natural-language query about a customer via Ollama (Llama 3.1). |
+| `GET` | `/api/import/templates` | Catalog of supported canonical CSV templates with required and optional columns. |
+| `GET` | `/api/import/templates/download` | Download pre-packaged ZIP bundle containing all 7 canonical CSV templates. |
+| `GET` | `/api/import/templates/{filename}` | Download an individual canonical CSV template file. |
+| `POST` | `/api/import/preview` | Upload and preview a dataset ZIP archive. Generates validation issues, row stats, and staging session ID. |
+| `POST` | `/api/import/commit` | Confirm and transactionally commit a validated import session into SQLite. |
+| `GET` | `/` | Serves the single-page frontend application. |
+| `GET` | `/static/*` | Serves static assets (CSS, JavaScript). |
 
-Only synthetic/demo customer data is used during development.
-No real customer information should be committed to this repository.
+---
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                       Browser Client                        │
+│          (HTML5 / Modern Automotive CSS / Vanilla JS)       │
+└──────────────────────────────┬──────────────────────────────┘
+                               │ HTTP / JSON fetch()
+┌──────────────────────────────▼──────────────────────────────┐
+│                  FastAPI Backend Server                      │
+│                  (http://127.0.0.1:8000)                    │
+│                                                             │
+│   GET /api/health                                           │
+│   GET /api/customers/search                                 │
+│   GET /api/customers/{id}/360                               │
+│   POST /api/agent/query                                     │
+├──────────────────────────────┬──────────────────────────────┤
+│       Service Layer          │        AI Agent Layer        │
+│   (Customer 360 & CLTV)      │   (Prompt Builder & Citations│
+└──────────────┬───────────────┴──────────────┬───────────────┘
+               │ SQLAlchemy ORM               │ HTTP REST
+┌──────────────▼───────────────┐ ┌────────────▼───────────────┐
+│     SQLite Database          │ │      Local Ollama Engine    │
+│  (data/autoinsight360.db)    │ │      (llama3.1:latest)     │
+└──────────────────────────────┘ └─────────────────────────────┘
+```
+
+---
+
+## Security & Guardrails
+
+1. **Parameterised ORM Queries**: All database queries use SQLAlchemy ORM constructs. Raw SQL string interpolation is strictly prohibited.
+2. **Read-Only AI Tools**: The AI Agent cannot perform database write or schema mutation operations.
+3. **No Arbitrary SQL**: The AI Assistant receives structured context data and cannot execute SQL queries.
+4. **Input Constraints**: Customer IDs are validated as positive integers; question inputs are restricted to 3–500 characters.
+5. **Synthetic Data Policy**: All personal names, email addresses (`@autoinsight.demo`), VINs (`SYNTH-...`), and phone numbers (`555-...`) are entirely synthetic and fictitious.
+
+---
+
+## Demo Workflow
+
+1. Start Ollama: `ollama run llama3.1` (or background service).
+2. Start the application:
+   ```powershell
+   .\.venv\Scripts\uvicorn.exe backend.app.main:app --host 127.0.0.1 --port 8000
+   ```
+3. Open `http://localhost:8000` in your web browser.
+4. Search for a customer (e.g. `Katherine` or ID `1`) or select one from the quick dropdown.
+5. Review the Customer 360 profile:
+   - Historical CLTV and spending breakdown
+   - Loyalty points balance and history
+   - Vehicles owned and primary vehicle designation
+   - Service visit records and maintenance expenditure
+   - Customer feedback reviews
+6. Use the **Customer Insights AI** panel to ask questions or click 1-click insight prompts.

@@ -1,0 +1,3 @@
+dealer_ref,name,city,state,country,phone,email,is_active
+DLR-01,Apex Motors Seattle,Seattle,WA,USA,206-555-0144,contact@apexmotors.demo,true
+DLR-02,Summit Automotive Austin,Austin,TX,USA,512-555-0199,service@summitauto.demo,true

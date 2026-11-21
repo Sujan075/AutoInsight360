@@ -1,0 +1,4 @@
+vehicle_ref,dealer_ref,service_type,service_date,mileage_at_service,cost,description,technician_notes,is_warranty,next_service_date
+VEH-01,DLR-01,oil_change,2023-10-15,10200,120.00,Synthetic oil and filter replacement,Multi-point inspection passed.,false,2024-04-15
+VEH-01,DLR-01,tyre_rotation,2024-03-22,16400,65.00,Tire rotation and brake check,Brake pads at 8mm front 7mm rear.,false,2024-09-22
+VEH-02,DLR-02,major_service,2023-09-05,15000,420.00,Scheduled 15k major inspection,All systems nominal.,false,2024-03-05

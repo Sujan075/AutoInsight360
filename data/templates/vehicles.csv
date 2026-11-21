@@ -1,0 +1,3 @@
+vehicle_ref,customer_ref,vin,make,model,year,color,trim,body_style,fuel_type,transmission,engine,purchase_date,purchase_price,mileage_at_purchase,current_mileage,is_primary,is_active
+VEH-01,CUST-001,SYNTH-9001-MVAN001,Toyota,RAV4 Prime,2023,Midnight Black,XSE,SUV,Plug-in Hybrid,CVT,2.5L 4-Cylinder,2023-04-10,48500.00,15,18500,true,true
+VEH-02,CUST-002,SYNTH-9002-EREY002,Honda,Accord Hybrid,2022,Sonic Gray,Touring,Sedan,Hybrid,CVT,2.0L 4-Cylinder,2022-08-15,36200.00,10,24300,true,true

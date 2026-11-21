@@ -1,0 +1,3 @@
+customer_ref,dealer_ref,vehicle_ref,review_type,rating,title,body,review_date,is_verified,is_published
+CUST-001,DLR-01,VEH-01,service,5,Exceptional Service Experience,Apex Motors handled the 10k service quickly and professionally.,2023-10-16,true,true
+CUST-002,DLR-02,VEH-02,vehicle,5,Love the Accord Hybrid,Great fuel economy and smooth ride for my daily commute.,2022-09-01,true,true

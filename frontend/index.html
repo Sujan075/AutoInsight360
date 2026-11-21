@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AutoInsight360 — Automotive Customer 360 Intelligence</title>
+  <link rel="stylesheet" href="/static/css/styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- Top Navigation Header -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/>
+            <circle cx="7" cy="17" r="2"/>
+            <path d="M9 17h6"/>
+            <circle cx="17" cy="17" r="2"/>
+          </svg>
+        </div>
+        <div>
+          <h1 class="brand-title">AutoInsight<span>360</span></h1>
+          <p class="brand-subtitle">Automotive Customer 360 Intelligence Agent</p>
+        </div>
+      </div>
+
+      <!-- System Status Badges & Import Action -->
+      <div class="system-status">
+        <button id="openImportModalBtn" class="btn btn-import-header" title="Import new automotive customer dataset">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+          <span>Import Data</span>
+        </button>
+        <div class="status-pill" id="dbStatusPill">
+          <span class="status-dot"></span>
+          <span id="dbStatusText">Checking DB...</span>
+        </div>
+        <div class="status-pill" id="aiStatusPill">
+          <span class="status-dot"></span>
+          <span id="aiStatusText">Checking AI...</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="main-container">
+    <!-- Search & Filter Bar -->
+    <section class="search-section card">
+      <div class="search-bar-row">
+        <div class="search-input-wrapper">
+          <svg class="search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input 
+            type="text" 
+            id="searchInput" 
+            placeholder="Search by customer name, ID, email, phone, or VIN..." 
+            autocomplete="off"
+          />
+          <button id="clearSearchBtn" class="clear-btn" title="Clear search" style="display: none;">&times;</button>
+        </div>
+
+        <button id="searchBtn" class="btn btn-primary">
+          <span>Search</span>
+        </button>
+
+        <!-- Quick Demo Customer Selector -->
+        <div class="quick-select-wrapper">
+          <select id="quickSelectDropdown" class="select-dropdown">
+            <option value="">⚡ Quick Select Customer...</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Live Search Results Dropdown/List -->
+      <div id="searchResultsContainer" class="search-results-container" style="display: none;">
+        <div class="search-results-header">
+          <span id="searchResultsCount">0 results found</span>
+          <button id="closeSearchResultsBtn" class="text-btn">Close</button>
+        </div>
+        <div id="searchResultsList" class="search-results-list"></div>
+      </div>
+    </section>
+
+    <!-- Global Alert / Notification Toast -->
+    <div id="alertBanner" class="alert-banner" style="display: none;">
+      <span id="alertMessage"></span>
+      <button id="closeAlertBtn" class="close-alert">&times;</button>
+    </div>
+
+    <!-- Empty State (When no customer is selected) -->
+    <section id="emptyState" class="empty-state card">
+      <div class="empty-state-icon">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+          <circle cx="9" cy="7" r="4"/>
+          <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+          <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+        </svg>
+      </div>
+      <h2>Select a Customer to View Customer 360</h2>
+      <p>Search by customer name, customer ID, email address, phone number, or vehicle VIN above to view unified profile metrics, vehicles, transactions, services, and AI insights.</p>
+      <div class="empty-state-suggestions" id="emptyStateSuggestions">
+        <span>Suggested Customers:</span>
+        <div class="suggestion-chips" id="suggestionChips"></div>
+      </div>
+    </section>
+
+    <!-- Loading Skeleton -->
+    <section id="loadingState" class="loading-state card" style="display: none;">
+      <div class="spinner"></div>
+      <p id="loadingMessage">Loading Customer 360 Profile...</p>
+    </section>
+
+    <!-- Customer 360 Profile View -->
+    <div id="customerProfileView" class="customer-profile-view" style="display: none;">
+      
+      <!-- Customer Header Banner -->
+      <section class="customer-hero card">
+        <div class="hero-main">
+          <div class="customer-avatar" id="customerAvatar">KD</div>
+          <div class="customer-titles">
+            <div class="customer-name-row">
+              <h2 id="custFullName">Katherine Davis</h2>
+              <span id="custSegmentBadge" class="badge badge-segment">Premium</span>
+              <span id="custStatusBadge" class="badge badge-success">Active</span>
+              <span class="customer-id-tag">ID: <span id="custIdTag">#1</span></span>
+            </div>
+            <div class="customer-meta-row">
+              <span class="meta-item">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                <span id="custEmail">katherine.davis1@autoinsight.demo</span>
+              </span>
+              <span class="meta-item">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                <span id="custPhone">555-481-9921</span>
+              </span>
+              <span class="meta-item">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                <span id="custLocation">Houston, TX</span>
+              </span>
+              <span class="meta-item">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                <span>Joined <span id="custJoined">2023-01-15</span></span>
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- KPI Metrics Cards Grid -->
+      <section class="kpi-grid">
+        <!-- 1. CLTV -->
+        <div class="kpi-card card">
+          <div class="kpi-header">
+            <span class="kpi-title">Historical Value (CLTV)</span>
+            <div class="kpi-icon icon-green">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+            </div>
+          </div>
+          <div class="kpi-value" id="kpiCltv">$0.00</div>
+          <div class="kpi-subtext" id="kpiCltvBreakdown">Completed purchases & services</div>
+        </div>
+
+        <!-- 2. Loyalty Balance -->
+        <div class="kpi-card card">
+          <div class="kpi-header">
+            <span class="kpi-title">Loyalty Points</span>
+            <div class="kpi-icon icon-gold">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            </div>
+          </div>
+          <div class="kpi-value" id="kpiLoyaltyBalance">0 pts</div>
+          <div class="kpi-subtext" id="kpiLoyaltySub">0 earned • 0 redeemed</div>
+        </div>
+
+        <!-- 3. Vehicles Owned -->
+        <div class="kpi-card card">
+          <div class="kpi-header">
+            <span class="kpi-title">Vehicles Owned</span>
+            <div class="kpi-icon icon-blue">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/></svg>
+            </div>
+          </div>
+          <div class="kpi-value" id="kpiVehiclesCount">0</div>
+          <div class="kpi-subtext" id="kpiPrimaryVehicle">Primary: None</div>
+        </div>
+
+        <!-- 4. Service Maintenance -->
+        <div class="kpi-card card">
+          <div class="kpi-header">
+            <span class="kpi-title">Service Maintenance</span>
+            <div class="kpi-icon icon-purple">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+            </div>
+          </div>
+          <div class="kpi-value" id="kpiServiceVisits">0 visits</div>
+          <div class="kpi-subtext" id="kpiServiceCost">$0.00 total spend</div>
+        </div>
+
+        <!-- 5. Transactions Count -->
+        <div class="kpi-card card">
+          <div class="kpi-header">
+            <span class="kpi-title">Transactions</span>
+            <div class="kpi-icon icon-teal">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+            </div>
+          </div>
+          <div class="kpi-value" id="kpiTransactionsCount">0</div>
+          <div class="kpi-subtext" id="kpiTxSub">0 completed</div>
+        </div>
+
+        <!-- 6. Reviews & Rating -->
+        <div class="kpi-card card">
+          <div class="kpi-header">
+            <span class="kpi-title">Feedback & Rating</span>
+            <div class="kpi-icon icon-orange">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            </div>
+          </div>
+          <div class="kpi-value" id="kpiRating">N/A</div>
+          <div class="kpi-subtext" id="kpiReviewsCount">0 reviews submitted</div>
+        </div>
+      </section>
+
+      <!-- Customer 360 Workspace (Tabs on Left, AI Assistant on Right) -->
+      <div class="workspace-grid">
+        
+        <!-- Details Column -->
+        <div class="workspace-details">
+          
+          <!-- Tabs Navigation -->
+          <div class="tabs-nav card">
+            <button class="tab-btn active" data-tab="vehiclesTab">
+              <span>🚗 Vehicles</span>
+              <span class="tab-badge" id="vehiclesTabBadge">0</span>
+            </button>
+            <button class="tab-btn" data-tab="servicesTab">
+              <span>🔧 Service History</span>
+              <span class="tab-badge" id="servicesTabBadge">0</span>
+            </button>
+            <button class="tab-btn" data-tab="transactionsTab">
+              <span>💳 Transactions</span>
+              <span class="tab-badge" id="transactionsTabBadge">0</span>
+            </button>
+            <button class="tab-btn" data-tab="loyaltyTab">
+              <span>🎁 Loyalty Events</span>
+              <span class="tab-badge" id="loyaltyTabBadge">0</span>
+            </button>
+            <button class="tab-btn" data-tab="reviewsTab">
+              <span>⭐ Reviews</span>
+              <span class="tab-badge" id="reviewsTabBadge">0</span>
+            </button>
+          </div>
+
+          <!-- Tab 1: Vehicles -->
+          <div id="vehiclesTab" class="tab-pane active card">
+            <div class="pane-header">
+              <h3>Owned Vehicles</h3>
+              <p class="pane-subtitle">Verified customer vehicle registrations and specifications.</p>
+            </div>
+            <div id="vehiclesList" class="vehicles-grid"></div>
+          </div>
+
+          <!-- Tab 2: Services -->
+          <div id="servicesTab" class="tab-pane card">
+            <div class="pane-header">
+              <h3>Automotive Service & Maintenance History</h3>
+              <p class="pane-subtitle">Chronological record of service visits across all customer vehicles.</p>
+            </div>
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Vehicle</th>
+                    <th>Service Type</th>
+                    <th>Cost</th>
+                    <th>Dealer</th>
+                    <th>Mileage</th>
+                    <th>Warranty</th>
+                    <th>Notes</th>
+                  </tr>
+                </thead>
+                <tbody id="servicesTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Tab 3: Transactions -->
+          <div id="transactionsTab" class="tab-pane card">
+            <div class="pane-header">
+              <h3>Financial Transactions History</h3>
+              <p class="pane-subtitle">Vehicle purchases, service payments, parts, and accessory transactions.</p>
+            </div>
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Reference</th>
+                    <th>Date</th>
+                    <th>Type</th>
+                    <th>Amount</th>
+                    <th>Status</th>
+                    <th>Method</th>
+                    <th>Dealer</th>
+                    <th>Vehicle</th>
+                  </tr>
+                </thead>
+                <tbody id="transactionsTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Tab 4: Loyalty Events -->
+          <div id="loyaltyTab" class="tab-pane card">
+            <div class="pane-header">
+              <h3>Loyalty Points Audit Log</h3>
+              <p class="pane-subtitle">History of earned and redeemed customer loyalty reward points.</p>
+            </div>
+            <div id="loyaltyTimeline" class="loyalty-timeline"></div>
+          </div>
+
+          <!-- Tab 5: Reviews -->
+          <div id="reviewsTab" class="tab-pane card">
+            <div class="pane-header">
+              <h3>Customer Reviews & Satisfaction Feedback</h3>
+              <p class="pane-subtitle">Verified ratings and comments submitted for dealers, vehicles, or services.</p>
+            </div>
+            <div id="reviewsList" class="reviews-list"></div>
+          </div>
+
+        </div>
+
+        <!-- AI Assistant Column -->
+        <aside class="workspace-agent">
+          <div class="agent-panel card">
+            <div class="agent-panel-header">
+              <div class="agent-title-row">
+                <div class="ai-avatar">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 2a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2 2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"/>
+                    <rect x="4" y="8" width="16" height="12" rx="2"/>
+                    <circle cx="9" cy="13" r="1.5"/>
+                    <circle cx="15" cy="13" r="1.5"/>
+                    <path d="M9 17h6"/>
+                  </svg>
+                </div>
+                <div>
+                  <h3 class="agent-name">Customer Insights AI</h3>
+                  <span class="agent-model-tag">Llama 3.1 • Evidence Grounded</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Quick Question Chips -->
+            <div class="agent-prompt-chips">
+              <span class="chips-label">Quick Insights:</span>
+              <button class="prompt-chip" data-question="Provide a comprehensive Customer 360 executive summary.">
+                📋 Executive 360 Summary
+              </button>
+              <button class="prompt-chip" data-question="What vehicles does this customer own, what is their mileage, and what is their maintenance history?">
+                🚗 Vehicles & Service Status
+              </button>
+              <button class="prompt-chip" data-question="Analyze this customer's total spending, lifetime value, and transaction patterns.">
+                💰 Value & Spending Analysis
+              </button>
+              <button class="prompt-chip" data-question="What is this customer's satisfaction level based on their reviews and ratings?">
+                ⭐ Satisfaction & Sentiment
+              </button>
+            </div>
+
+            <!-- Conversation Display Area -->
+            <div id="agentChatHistory" class="agent-chat-history">
+              <div class="agent-welcome-message">
+                <p>Hello! I am your <strong>AutoInsight360 Intelligence Agent</strong>. Ask me any question about <strong id="agentTargetCustomerName">the selected customer</strong>.</p>
+                <p class="agent-guardrail-note">🔒 All answers are strictly grounded in verified database records with cited record IDs. No arbitrary SQL or hallucinated data.</p>
+              </div>
+            </div>
+
+            <!-- Loading Indicator for Agent -->
+            <div id="agentLoading" class="agent-loading" style="display: none;">
+              <div class="spinner-small"></div>
+              <span>Querying verified database records & running Llama 3.1...</span>
+            </div>
+
+            <!-- Agent Input Form -->
+            <form id="agentQueryForm" class="agent-input-form">
+              <div class="input-with-counter">
+                <textarea 
+                  id="agentQuestionInput" 
+                  placeholder="Ask a question about this customer's vehicles, services, spend, or loyalty..." 
+                  rows="2" 
+                  maxlength="500"
+                  required
+                ></textarea>
+                <div class="char-counter"><span id="charCount">0</span>/500</div>
+              </div>
+              <button type="submit" id="agentSubmitBtn" class="btn btn-accent">
+                <span>Ask AI Agent</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="22" y1="2" x2="11" y2="13"/>
+                  <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                </svg>
+              </button>
+            </form>
+          </div>
+        </aside>
+
+      </div>
+    </div>
+  </main>
+
+  <!-- Import Data Modal -->
+  <div id="importModal" class="modal-overlay" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <div class="modal-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+          </div>
+          <div>
+            <h2 class="modal-title">Dynamic Automotive Data Ingestion</h2>
+            <p class="modal-subtitle">Import customer datasets via validated canonical CSV ZIP bundle</p>
+          </div>
+        </div>
+        <button id="closeImportModalBtn" class="modal-close-btn" title="Close">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Live Database Metrics -->
+        <div class="import-db-metrics">
+          <div class="import-metric-chip">
+            <span class="metric-label">Customers</span>
+            <span class="metric-val" id="metricCustomers">--</span>
+          </div>
+          <div class="import-metric-chip">
+            <span class="metric-label">Vehicles</span>
+            <span class="metric-val" id="metricVehicles">--</span>
+          </div>
+          <div class="import-metric-chip">
+            <span class="metric-label">Dealers</span>
+            <span class="metric-val" id="metricDealers">--</span>
+          </div>
+          <div class="import-metric-chip">
+            <span class="metric-label">Transactions</span>
+            <span class="metric-val" id="metricTransactions">--</span>
+          </div>
+          <div class="import-metric-chip">
+            <span class="metric-label">Service Visits</span>
+            <span class="metric-val" id="metricServices">--</span>
+          </div>
+        </div>
+
+        <!-- Download CSV Templates -->
+        <div class="import-templates-box">
+          <div class="templates-header">
+            <h4>Canonical CSV Templates</h4>
+            <a href="/api/import/templates/download" class="btn btn-outline-sm" download>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              <span>Download All Templates (.ZIP)</span>
+            </a>
+          </div>
+          <div class="template-links-pills">
+            <a href="/api/import/templates/customers.csv" class="template-pill" download>customers.csv</a>
+            <a href="/api/import/templates/vehicles.csv" class="template-pill" download>vehicles.csv</a>
+            <a href="/api/import/templates/dealers.csv" class="template-pill" download>dealers.csv</a>
+            <a href="/api/import/templates/transactions.csv" class="template-pill" download>transactions.csv</a>
+            <a href="/api/import/templates/service_visits.csv" class="template-pill" download>service_visits.csv</a>
+            <a href="/api/import/templates/loyalty_events.csv" class="template-pill" download>loyalty_events.csv</a>
+            <a href="/api/import/templates/customer_reviews.csv" class="template-pill" download>customer_reviews.csv</a>
+          </div>
+        </div>
+
+        <!-- Upload Form -->
+        <div class="upload-zone" id="uploadZone">
+          <input type="file" id="zipFileInput" accept=".zip" style="display: none;">
+          <div class="upload-zone-content" id="uploadZoneContent">
+            <svg class="upload-icon" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/>
+              <path d="M12 12v9"/>
+              <path d="m16 16-4-4-4 4"/>
+            </svg>
+            <p class="upload-prompt"><strong>Click to select</strong> or drag and drop your dataset ZIP file</p>
+            <p class="upload-hint">Supported format: .zip containing canonical CSVs (Max 15MB)</p>
+          </div>
+          <div id="selectedFileInfo" class="selected-file-info" style="display: none;">
+            <span class="file-name" id="selectedFileName">filename.zip</span>
+            <span class="file-size" id="selectedFileSize">0 KB</span>
+            <button id="removeFileBtn" class="btn-text-danger" title="Remove">&times;</button>
+          </div>
+        </div>
+
+        <!-- Upload / Preview Action Button -->
+        <div class="import-action-bar">
+          <button id="previewImportBtn" class="btn btn-primary" disabled>
+            <span>Upload & Validate Preview</span>
+          </button>
+          <div id="importSpinner" class="spinner" style="display: none;"></div>
+        </div>
+
+        <!-- Validation & Preview Results Container -->
+        <div id="previewResultsContainer" class="preview-results-container" style="display: none;">
+          <div class="preview-header-row">
+            <h3 id="previewStatusTitle">Validation Results</h3>
+            <div class="preview-badges">
+              <span id="badgeAcceptedCount" class="badge-pill badge-success">0 Accepted</span>
+              <span id="badgeRejectedCount" class="badge-pill badge-danger" style="display: none;">0 Rejected</span>
+            </div>
+          </div>
+
+          <!-- Entity Summary Table -->
+          <div class="table-container">
+            <table class="preview-table">
+              <thead>
+                <tr>
+                  <th>Entity</th>
+                  <th>File</th>
+                  <th>Total Rows</th>
+                  <th>Accepted</th>
+                  <th>Rejected</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="previewTableBody"></tbody>
+            </table>
+          </div>
+
+          <!-- Issues & Errors Drawer -->
+          <div id="previewIssuesBox" class="preview-issues-box" style="display: none;">
+            <h4>Validation Issues & Warnings</h4>
+            <ul id="previewIssuesList" class="issues-list"></ul>
+          </div>
+
+          <!-- Commit Bar -->
+          <div class="commit-action-row">
+            <button id="commitImportBtn" class="btn btn-success" disabled>
+              <span>Confirm & Commit Import</span>
+            </button>
+            <button id="cancelPreviewBtn" class="btn btn-secondary">Cancel</button>
+          </div>
+        </div>
+
+        <!-- Success Feedback Banner -->
+        <div id="importSuccessBox" class="import-success-box" style="display: none;">
+          <div class="success-icon">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+              <polyline points="22 4 12 14.01 9 11.01"/>
+            </svg>
+          </div>
+          <div class="success-content">
+            <h4>Import Committed Successfully!</h4>
+            <p id="importSuccessMessage">All valid records have been saved into the database.</p>
+            <div id="importSuccessCounts" class="import-success-chips"></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="app-footer">
+    <div class="footer-container">
+      <p>AutoInsight360 — Automotive Customer 360 Intelligence System</p>
+      <p class="footer-note">Synthetic Automotive Customer Dataset • Local Llama 3.1 Inference • Phase 2 Full-Stack</p>
+    </div>
+  </footer>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
